@@ -1,14 +1,17 @@
-﻿GATEHOUSE demo + TS reference conformance — 2026-07-11 (after comprehensive verifier hardening)
-Includes the gatehouse-native session_seal (Opus V1/V2, Codex #6): an EXTRA top-level
-field the TS reference verifier ignores, so byte-for-byte interop is preserved.
+﻿GATEHOUSE demo + TS reference conformance — 2026-07-11 FINAL (after two sign-off rounds)
+118 pytest tests pass. Two independent reviewers APPROVE (Fable 5 + rerouted Opus 4.8);
+gpt-5.6-sol did round-1 then was classifier-ejected on round-2 (exhibit saved).
 
-gatehouse demo -> exit 0 (session opened; shadow disposition; dual bundles; verify AUTHENTICATED;
-served_model reroute fable->sonnet surfaced; pair binding ok).
+gatehouse demo -> exit 0 (gated session; shadow disposition; dual bundles; verify
+AUTHENTICATED; served_model reroute fable->sonnet surfaced; pair binding ok).
 
 node packages/cli/dist/index.js verify <demo>/bundle-full/audit_log.json
-  -> AUTHENTICATED — all verifications passed. EXIT 0   (C1, with session_seal present)
+  -> AUTHENTICATED. EXIT 0   (C1, with served_model + session_seal both present and ignored by TS)
 
 node packages/cli/dist/index.js verify-pair <demo>/bundle-redacted <demo>/bundle-full/audit_log.json
   -> faithful derivation. EXIT 0   (C2)
 
-108 pytest tests pass. Opus + Codex GPT-5.6-Sol findings fixed (docs/redteam/2026-07-11-fixes-applied.md).
+gatehouse verify <standalone log with session_seal stripped>
+  -> AUTHENTICATED + 'NO FULL-ENVELOPE SEAL' warning (honest surfacing of the #17b standalone boundary)
+gatehouse verify <same> --strict
+  -> VERIFICATION FAILED: strict: no valid full-envelope session_seal

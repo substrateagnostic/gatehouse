@@ -90,6 +90,15 @@ def _echo_report(report) -> int:
             "have been stripped.",
             fg="yellow",
         )
+    if report.status == "authenticated" and report.envelope_valid is None:
+        click.secho(
+            "NO FULL-ENVELOPE SEAL: this log authenticated, but its session "
+            "envelope (intent_contract, human_authorizer, org_id, …) is not "
+            "covered by a gatehouse session_seal — those fields are not tamper-"
+            "evident on this standalone log. Use --strict to fail on this, or "
+            "verify the full bundle (which requires the seal).",
+            fg="yellow",
+        )
     for m in report.served_model_mismatches:
         click.echo(
             f"NOTE  served_model mismatch at sequence {m['sequence']}: "
@@ -112,14 +121,17 @@ def _echo_report(report) -> int:
 
 @main.command()
 @click.argument("target", type=click.Path(exists=True, path_type=Path))
-def verify(target: Path) -> None:
+@click.option("--strict", is_flag=True, help="Fail a standalone log that is not fully attributed or lacks a full-envelope session_seal.")
+def verify(target: Path, strict: bool) -> None:
     """Verify a bundle directory or an audit_log.json. Tri-state verdict."""
     from .verify import verify_audit_log, verify_bundle
 
     if target.is_dir():
         report = verify_bundle(target)
     else:
-        report = verify_audit_log(json.loads(target.read_text(encoding="utf-8")))
+        report = verify_audit_log(
+            json.loads(target.read_text(encoding="utf-8")), strict=strict
+        )
     sys.exit(_echo_report(report))
 
 

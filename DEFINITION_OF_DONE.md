@@ -151,14 +151,17 @@ All receipts under `evidence/qa/` (`tamper_pass_receipts.txt` 10/10;
       completed (survived the classifier this time; QA framing) +
       `evidence/qa/codex_gpt56sol_qa_review.txt`; Opus 4.8 in-context adversarial
       pass; the earlier classifier ejection is preserved as an exhibit
-      (`docs/redteam/2026-07-11-classifier-ejection-exhibit.md`). 10 Codex + Opus
-      findings fixed; **independent Fable + gpt-5.6-sol sign-off in progress**.
+      (`docs/redteam/2026-07-11-classifier-ejection-exhibit.md`). All findings
+      fixed across two rounds; **two independent reviewers APPROVE** (Fable 5 +
+      a rerouted Opus 4.8; gpt-5.6-sol did the round-1 review then was ejected on
+      round-2). See `docs/redteam/2026-07-11-fixes-applied.md` +
+      `2026-07-11-opus-signoff.md`.
 
 ## 7. Morning artifact
 
-- [ ] **M1 — `NEEDS_YOU.md`**: what exists, evidence paths, one demo command
-      that works cold, QA results, UNVERIFIED list, AER feedback list,
-      served_model sample, human-only decisions (name, license, publish-or-hold).
+- [x] **M1 — `NEEDS_YOU.md`**: written — TL;DR, cold demo command, evidence
+      paths, honest UNVERIFIED list, AER feedback, served_model sample, the four
+      human decisions, and the two-reviewer sign-off result.
 
 ## Out of scope tonight (recorded so absence is a decision, not an accident)
 

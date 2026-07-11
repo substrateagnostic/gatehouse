@@ -481,3 +481,24 @@ def test_strict_mode_downgrades_partial_attribution(full_bundle: Path) -> None:
     del log["entries"][0]["agent_signature"]
     assert verify_audit_log(log).status == "authenticated"  # lenient default
     assert verify_audit_log(log, strict=True).status == "failed"  # strict
+
+
+def test_strict_mode_downgrades_missing_envelope_seal(full_bundle: Path) -> None:
+    # Opus sign-off: strict mode also fails a standalone log with no envelope seal.
+    log = _log(full_bundle)
+    log.pop("session_seal", None)
+    assert verify_audit_log(log).status == "authenticated"  # lenient default (#17b)
+    r = verify_audit_log(log, strict=True)
+    assert r.status == "failed"
+    assert "session_seal" in r.failing_step
+
+
+def test_bundle_total_on_list_org_signature(full_bundle: Path, store: SessionStore) -> None:
+    # Opus sign-off nit: a list-typed org_signature must not raise in verify_bundle.
+    log = _log(full_bundle)
+    log["org_signature"] = ["not", "a", "dict"]
+    (full_bundle / "audit_log.json").write_text(
+        json.dumps(log, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    _reseal_manifest(full_bundle, store)
+    assert verify_bundle(full_bundle).status == "failed"  # no crash

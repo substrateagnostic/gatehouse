@@ -658,7 +658,8 @@ def _verify_bundle_impl(bundle_dir: Path) -> VerificationReport:
     if seal is False:
         return _fail(base, "manifest operator_signature does not verify")
     # ...and, for an operational bundle, by the SAME operator as the audit log.
-    org_key = (audit_log.get("org_signature") or {}).get("public_key") if isinstance(audit_log, dict) else None
+    _org = audit_log.get("org_signature") if isinstance(audit_log, dict) else None
+    org_key = _org.get("public_key") if isinstance(_org, dict) else None
     seal_key = _manifest_seal_key(manifest)
     if org_key and seal_key and seal_key != org_key:
         return _fail(base, "manifest is sealed by a different key than the audit-log operator")

@@ -92,11 +92,27 @@ gatehouse closes this for its own produce+verify path with an additive
 **`session_seal`** over the whole envelope (the TS verifier ignores it, so
 interop holds). Closing it *universally* is the AER-spec question below.
 
-**Independent sign-off (per your workflow):** Fable 5 and gpt-5.6-sol were each
-asked to sign off on the fixes before they're marked final. Result:
-<!-- SIGNOFF-RESULT -->
-_pending — will be stamped here when both return; see
-`evidence/qa/codex_gpt56sol_signoff.txt` and the Fable sign-off note below._
+**Independent sign-off (per your workflow): APPROVED by two independent
+reviewers.**
+- **Fable 5 — APPROVE.** Re-ran the suite and reproduced every round-2 fix
+  firing for the right reason; confirmed the exact `verify_pair(None)` input its
+  round-1 review flagged now returns `failed`; fresh 8-input totality sweep, no
+  crash, no authenticated-tamper.
+- **Opus 4.8 (independent, rerouted) — APPROVE.** Wrote 60+ adversarial probes
+  from scratch (path traversal, surrogate canonicalization, signature reuse, F1
+  swap, seal corruption); verifier is total, no tampered representation
+  authenticates, TS interop intact. Full record:
+  `docs/redteam/2026-07-11-opus-signoff.md`.
+- **gpt-5.6-sol — round-1 full review (CHANGES-REQUESTED, all 10 fixed); round-2
+  re-review was ejected by OpenAI's cyber classifier before its final verdict**
+  (its verification runs succeeded first). That ejection triggered the reroute to
+  the second Opus reviewer above and is preserved as an exhibit
+  (`docs/redteam/2026-07-11-classifier-ejection-exhibit.md`) — the third such
+  ejection tonight, all on the same structural fact the tool exists to surface.
+
+Both sign-offs raised only one non-blocking item (the standalone CLI dropped the
+envelope-seal warning); it is now fixed — `gatehouse verify` warns when an
+authenticated standalone log has no full-envelope seal, and `--strict` fails it.
 
 ---
 

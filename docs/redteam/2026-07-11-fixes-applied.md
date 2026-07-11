@@ -3,11 +3,18 @@
 Every finding from the two independent reviews — the Opus 4.8 adversarial pass
 (`2026-07-11-opus-verifier-review.md`) and the Codex GPT-5.6-Sol xhigh QA pass
 (`evidence/qa/codex_gpt56sol_qa_review.txt`) — with its fix and the regression
-test that locks it. Status is **provisional until both a Fable and a
-gpt-5.6-sol subagent independently sign off** (per Alex's directive); this
-ledger is the input to that sign-off.
+test that locks it.
 
-Suite: **108 tests pass**. Cold demo exit 0. TS reference verifier still
+**Status: SIGNED OFF.** Two independent reviewers APPROVE the fixes: Fable 5
+(re-ran the suite, reproduced every fix) and a fresh Opus 4.8 reviewer (60+
+adversarial probes, `2026-07-11-opus-signoff.md`) — the latter rerouted after
+the gpt-5.6-sol round-2 re-review was ejected by OpenAI's cyber classifier
+(round-1 review completed and all 10 of its findings were fixed; ejection
+preserved as an exhibit). The reviewers' one non-blocking item — the standalone
+CLI dropped the envelope-seal warning — is fixed (`gatehouse verify` now warns,
+`--strict` fails it) along with a list-typed-`org_signature` robustness guard.
+
+Suite: **118 tests pass**. Cold demo exit 0. TS reference verifier still
 AUTHENTICATES gatehouse bundles and certifies the redacted pair (C1/C2 hold).
 
 ## Fixes
