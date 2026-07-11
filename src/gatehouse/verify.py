@@ -63,6 +63,14 @@ class VerificationReport:
     contract_hash_valid: Optional[bool]
     failing_step: Optional[str]
     served_model_mismatches: list[dict] = field(default_factory=list)
+    # None when the session declares no agent identity; True when every entry
+    # carries a verified agent signature; False when identity is declared but
+    # some entries are unsigned (a signature-stripping / de-attribution signal —
+    # Opus review V3). Does not by itself change ``status`` on a standalone log
+    # (mixed attribution is valid under the reference), but ``verify_bundle``
+    # fails an otherwise-authenticated gatehouse bundle that is not fully
+    # attributed, and the CLI always surfaces it.
+    fully_attributed: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
@@ -106,8 +114,10 @@ def _served_model_mismatches(entries: list[dict[str, Any]]) -> list[dict]:
     """
     out: list[dict] = []
     for chained in entries:
+        if not isinstance(chained, dict):
+            continue
         entry = chained.get("entry", {})
-        if entry.get("type") != "model_call":
+        if not isinstance(entry, dict) or entry.get("type") != "model_call":
             continue
         served = entry.get("served_model")
         if served is not None and served != entry.get("model_id"):
@@ -123,13 +133,13 @@ def _served_model_mismatches(entries: list[dict[str, Any]]) -> list[dict]:
 
 def _verify_org_signature(log: dict[str, Any]) -> Optional[bool]:
     org = log.get("org_signature")
-    if not org:
+    if not isinstance(org, dict) or not org:
         return None
     try:
-        pub = load_public_key_b64(org["public_key"])
+        pub = load_public_key_b64(org.get("public_key"))
     except Exception:
         return False
-    return verify_signature(pub, org["signature"], jcs_bytes(org_signature_block(log)))
+    return verify_signature(pub, org.get("signature"), jcs_bytes(org_signature_block(log)))
 
 
 def _verify_agent_signatures(
@@ -152,33 +162,35 @@ def _verify_agent_signatures(
     verified = 0
 
     for chained in log.get("entries", []):
-        sig = chained.get("agent_signature")
+        sig = chained.get("agent_signature") if isinstance(chained, dict) else None
         if not sig:
             continue
         present = True
+        if not isinstance(sig, dict):
+            return True, False, verified
 
         if not session_fp:
             return True, False, verified
 
         try:
-            embedded_fp = fingerprint_of(load_public_key_b64(sig["public_key"]))
+            embedded_fp = fingerprint_of(load_public_key_b64(sig.get("public_key")))
         except Exception:
             return True, False, verified
 
         if (
             embedded_fp != sig.get("fingerprint")
             or embedded_fp != session_fp
-            or (session_pk is not None and sig["public_key"] != session_pk)
+            or (session_pk is not None and sig.get("public_key") != session_pk)
         ):
             return True, False, verified
 
         try:
-            pub = load_public_key_b64(sig["public_key"])
+            pub = load_public_key_b64(sig.get("public_key"))
         except Exception:
             return True, False, verified
 
         message = str(chained.get("entry_hash", "")).encode("utf-8")
-        if not verify_signature(pub, sig["signature"], message):
+        if not verify_signature(pub, sig.get("signature"), message):
             return True, False, verified
 
         verified += 1
@@ -215,12 +227,21 @@ def _core(log: dict[str, Any]) -> dict[str, Any]:
             "agent_valid": None,
             "agent_verified": 0,
             "contract_hash_valid": None,
+            "fully_attributed": None,
             "served": served,
         }
 
     chain_valid, chain_count, chain_detail = verify_chain(entries)
 
-    computed_root = compute_merkle_root([e.get("entry_hash", "") for e in entries])
+    try:
+        computed_root = compute_merkle_root(
+            [e.get("entry_hash", "") if isinstance(e, dict) else "" for e in entries]
+        )
+    except Exception:
+        # A non-hex entry_hash cannot form a Merkle leaf. The chain check above
+        # has already flagged this entry; treat the root as non-recomputing
+        # rather than crashing the verifier (Opus review V5a).
+        computed_root = None
     log_root = log.get("merkle_root")
     merkle_strict_fail = False
     if entries and not log_root:
@@ -235,13 +256,36 @@ def _core(log: dict[str, Any]) -> dict[str, Any]:
 
     org_valid = _verify_org_signature(log)
     agent_present, agent_valid, agent_verified = _verify_agent_signatures(log)
-    contract_hash_valid = _contract_hash_valid(log.get("session", {}))
+    session = log.get("session", {}) if isinstance(log.get("session"), dict) else {}
+    contract_hash_valid = _contract_hash_valid(session)
+
+    # contract_hash is a §3.5 MUST. gatehouse ENFORCES it (stricter than the
+    # reference — feedback #6) for a sealed or agent-signed log, so a full log
+    # whose intent_contract was edited without updating the hash fails. A
+    # derived_redacted log is exempt: it deliberately retains the ORIGINAL
+    # contract_hash while carrying a redacted contract, so a recompute is not
+    # expected to match (Opus review V1, partial mitigation — the seal still
+    # does not cover the contract; see docs/aer-feedback.md #17b).
+    contract_enforced = bool(log.get("org_signature")) or agent_present
+    contract_fail = contract_enforced and contract_hash_valid is False
+
+    # De-attribution signal (Opus review V3): identity declared but not every
+    # entry signed.
+    session_fp = session.get("agent_fingerprint")
+    if not session_fp:
+        fully_attributed: Optional[bool] = None
+    else:
+        signed = sum(
+            1 for e in entries if isinstance(e, dict) and e.get("agent_signature")
+        )
+        fully_attributed = bool(entries) and signed == len(entries)
 
     any_present_failed = (
         not chain_valid
         or not merkle_valid
         or org_valid is False
         or agent_valid is False
+        or contract_fail
     )
 
     if any_present_failed:
@@ -258,8 +302,13 @@ def _core(log: dict[str, Any]) -> dict[str, Any]:
                 failing_step = "merkle_root does not recompute"
         elif org_valid is False:
             failing_step = "operator org_signature does not verify"
-        else:
+        elif agent_valid is False:
             failing_step = "agent signature verification failed (F1)"
+        else:
+            failing_step = (
+                "contract_hash does not match the recomputed intent_contract hash "
+                "(§3.5)"
+            )
     elif org_valid is True:
         status = "authenticated"
         failing_step = None
@@ -277,6 +326,7 @@ def _core(log: dict[str, Any]) -> dict[str, Any]:
         "agent_valid": agent_valid,
         "agent_verified": agent_verified,
         "contract_hash_valid": contract_hash_valid,
+        "fully_attributed": fully_attributed,
         "served": served,
     }
 
@@ -293,6 +343,7 @@ def _report_from_core(core: dict[str, Any]) -> VerificationReport:
         contract_hash_valid=core["contract_hash_valid"],
         failing_step=core["failing_step"],
         served_model_mismatches=core["served"],
+        fully_attributed=core.get("fully_attributed"),
     )
 
 
@@ -302,8 +353,23 @@ def _report_from_core(core: dict[str, Any]) -> VerificationReport:
 
 def verify_audit_log(log: dict[str, Any]) -> VerificationReport:
     """Verify an AuditLog dict (AER §4.3). Tri-state verdict, F1-strict agent
-    signatures, gatehouse-strict Merkle, v2-only."""
-    return _report_from_core(_core(log))
+    signatures, gatehouse-strict Merkle, v2-only.
+
+    Total: a malformed log yields a ``failed`` verdict, never a raised
+    exception (a verifier that crashes on hostile input is a denial-of-evidence
+    — Opus review V5)."""
+    if not isinstance(log, dict):
+        return VerificationReport(
+            "failed", False, 0, False, None, None, 0, None,
+            "audit log is not a JSON object", [],
+        )
+    try:
+        return _report_from_core(_core(log))
+    except Exception as exc:  # noqa: BLE001 — totality is the contract
+        return VerificationReport(
+            "failed", False, 0, False, None, None, 0, None,
+            f"verifier error on malformed input: {type(exc).__name__}", [],
+        )
 
 
 def _attestation_block(log: dict[str, Any], export_timestamp: str) -> dict[str, Any]:
@@ -427,8 +493,19 @@ def verify_bundle(bundle_dir: Path) -> VerificationReport:
             "audit_log.json missing from bundle", [],
         )
 
-    manifest = _read_json(manifest_path)
-    audit_log = _read_json(audit_log_path)
+    try:
+        manifest = _read_json(manifest_path)
+        audit_log = _read_json(audit_log_path)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        return VerificationReport(
+            "failed", False, 0, False, None, None, 0, None,
+            f"bundle contains unparseable JSON: {type(exc).__name__}", [],
+        )
+    if not isinstance(manifest, dict):
+        return VerificationReport(
+            "failed", False, 0, False, None, None, 0, None,
+            "hash_manifest.json is not a JSON object", [],
+        )
 
     base = verify_audit_log(audit_log)
 
@@ -452,10 +529,25 @@ def verify_bundle(bundle_dir: Path) -> VerificationReport:
     if base.status == "failed":
         return base
 
-    # (4) served_model record-vs-entry integrity (E8).
+    # (4) Full attribution: a gatehouse bundle signs every entry, so a sealed
+    # bundle that is not fully attributed has had a signature stripped (Opus
+    # review V3). Standalone log verification only surfaces this; the bundle
+    # format is gatehouse's own, so here it is a hard failure.
+    if base.status == "authenticated" and base.fully_attributed is False:
+        return _fail(
+            base,
+            f"partial attribution: {base.agent_verified_count} of "
+            f"{len(audit_log.get('entries', []))} entries signed "
+            "(an agent signature was stripped from a sealed bundle)",
+        )
+
+    # (5) served_model record-vs-entry integrity (E8).
     if record_path.exists() and entries_path.exists():
-        record = _read_json(record_path)
-        entries = _read_ndjson(entries_path)
+        try:
+            record = _read_json(record_path)
+            entries = _read_ndjson(entries_path)
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+            return _fail(base, f"bundle payload unparseable: {type(exc).__name__}")
         step = _served_projection_disagreement(record, entries)
         if step is not None:
             return _fail(base, step)
@@ -470,19 +562,39 @@ def verify_pair(redacted_dir: Path, original_log_path: Path) -> VerificationRepo
     was dropped/reordered/substituted, that the derived chain self-verifies, and
     that the manifest's source/derived tips are correct."""
     redacted_dir = Path(redacted_dir)
-    manifest = _read_json(redacted_dir / "hash_manifest.json")
-    derived = _read_ndjson(redacted_dir / "entries.ndjson")
-    original = _read_json(Path(original_log_path))
-    source_hashes = [e.get("entry_hash") for e in original.get("entries", [])]
-
-    source_count = len(source_hashes)
-    derived_count = len(derived)
-    served = _served_model_mismatches(derived)
 
     def failed(step: str, chain_valid: bool = False, chain_count: int = 0) -> VerificationReport:
         return VerificationReport(
-            "failed", chain_valid, chain_count, False, None, None, 0, None, step, served
+            "failed", chain_valid, chain_count, False, None, None, 0, None, step, [],
         )
+
+    try:
+        manifest = _read_json(redacted_dir / "hash_manifest.json")
+        derived = _read_ndjson(redacted_dir / "entries.ndjson")
+        original = _read_json(Path(original_log_path))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        return failed(f"pair inputs unreadable: {type(exc).__name__}")
+    if not isinstance(manifest, dict) or not isinstance(original, dict):
+        return failed("manifest or original is not a JSON object")
+
+    # A "faithful derivation" claim is only meaningful against an AUTHENTIC
+    # original. Verify the original first; refuse to certify a binding to a
+    # document that does not itself verify (Opus review V4). An unsigned but
+    # internally-consistent original (consistent_unattributed) is an acceptable
+    # source; only a FAILED original is refused.
+    original_report = verify_audit_log(original)
+    if original_report.status == "failed":
+        return failed(
+            f"original log does not verify ({original_report.failing_step}); "
+            "cannot certify a redaction binding against a non-authentic original"
+        )
+
+    source_hashes = [
+        e.get("entry_hash") for e in original.get("entries", []) if isinstance(e, dict)
+    ]
+    source_count = len(source_hashes)
+    derived_count = len(derived)
+    served = _served_model_mismatches(derived)
 
     if manifest.get("bundle_kind") != "derived_redacted":
         return failed(

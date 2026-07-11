@@ -1,0 +1,11 @@
+﻿Live served_model sample — 2026-07-11 overnight run
+One real proxied call: gatehouse (in-process app, real network) -> api.anthropic.com /v1/messages
+Requested model: claude-sonnet-5 | max_tokens 32 | upstream 200
+Provider-asserted model (response body 'model'): claude-sonnet-5
+Recorded in model_call entry: model_id=claude-sonnet-5, served_model=claude-sonnet-5
+No reroute occurred on this call — served == requested, mismatch list empty (that is the honest
+sample; the mechanism that would catch a reroute is proven in tests/test_served_model.py and
+the cold demo, where the stub upstream reroutes fable->sonnet and the mismatch is surfaced).
+Gate disposition: correct_continue (shadow) | verify: AUTHENTICATED
+Session: 7834806d-dacd-4626-81d9-416962b92837
+Bundle: var/live-sample/bundle-full (local only; var/ is gitignored)

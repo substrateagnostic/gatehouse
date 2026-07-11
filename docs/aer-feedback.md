@@ -245,3 +245,48 @@ reference CLI's `verify` command consumes. The spec should either add the log to
 the §5 bundle or define §4.3 verification directly over `evidence_record.json` +
 `entries.ndjson`, so a §5 recipient can produce the tri-state verdict without
 reconstructing the log by hand.
+
+## 17b. The operator seal does not cover the session envelope (§4.2) — HIGH
+
+Found in the Opus 4.8 adversarial verifier review (2026-07-11;
+`docs/redteam/2026-07-11-opus-verifier-review.md`), reproduced in
+`scripts/redteam_opus_poc.py`.
+
+The §4.2 operator seal signs `{session_id, merkle_root, entry_count, closed_at,
+schema_version, agent_fingerprint, canonicalization}`. That binds the entry set
+(through `merkle_root`) and four session scalars, but leaves the rest of the
+`SessionEnvelope` **unsigned**: `intent_contract`, `human_authorizer`, `org_id`,
+`compliance_contexts`, `policy_context`, `retention_days`, `metadata`.
+
+On a **standalone** audit log (which §1/§8 promise is offline-verifiable on its
+own), an adversary holding no key can therefore rewrite the intent contract —
+refreshing `contract_hash`, which is only a SHA-256, no key needed — or replace
+the human authorizer, and the record still verifies **authenticated**. The
+authorized-scope baseline that §3.5 exists to provide ("compare what the agent
+was authorized to do against what it did") is exactly what the adversary can
+rewrite undetectably.
+
+This is **shared with the reference implementation** (identical signed member
+set), so it is an AER-level design gap, not an implementation bug. It is caught
+in a bundle (the manifest seals the file bytes) but not on the bare log.
+
+Two independent implementations agreeing on a weakness is a spec finding by
+definition. Recommendation: in AER v0.2 either (a) bind a hash of the full,
+canonically-serialized session envelope into the operator seal and re-baseline
+the reference (this changes the seal bytes — a conformance break, hence a
+version bump), or (b) state explicitly that the standalone seal covers
+`{entry set + session scalars}` only and that envelope integrity is a
+transport/storage property, not a record property. gatehouse's interim
+mitigation: it **enforces** `contract_hash` on sealed/signed logs (closing the
+lazy variant, item #6) and surfaces the remaining gap here for the human
+decision.
+
+## 18. contract_hash: gatehouse enforces where the reference reports (§3.5, §4.3)
+
+Related to #6. Having found #17b, gatehouse now diverges from the reference by
+**enforcing** `contract_hash` during verification of any sealed or agent-signed
+log (`verify._core`), rather than merely reporting it. A `derived_redacted` log
+is exempt because it intentionally retains the original `contract_hash` against a
+redacted contract (§5(3)/F5). The spec marks `contract_hash` a MUST (§3.5); it
+should also state that a **verifier** MUST recompute and enforce it for
+non-redacted records, so this is conformant strictness rather than a divergence.

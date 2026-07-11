@@ -66,15 +66,22 @@ def verify_chain(entries: list[dict[str, Any]]) -> tuple[bool, int, Optional[str
     """
     prev_hash = ""
     for i, wrapper in enumerate(entries):
+        if not isinstance(wrapper, dict):
+            return False, i, f"entry {i}: not a JSON object"
         seq = wrapper.get("sequence")
         if seq != i:
             return False, i, f"entry {i}: sequence is {seq}, expected {i}"
         if wrapper.get("previous_hash") != prev_hash:
             return False, i, f"entry {i}: previous_hash does not match prior entry_hash"
-        expected = entry_hash(
-            i, wrapper["entry"], prev_hash, wrapper.get("authorized_by")
-        )
+        if "entry" not in wrapper:
+            return False, i, f"entry {i}: missing 'entry' member"
+        try:
+            expected = entry_hash(
+                i, wrapper["entry"], prev_hash, wrapper.get("authorized_by")
+            )
+        except Exception as exc:  # canonicalization failure on hostile input
+            return False, i, f"entry {i}: not canonicalizable ({type(exc).__name__})"
         if wrapper.get("entry_hash") != expected:
             return False, i, f"entry {i}: entry_hash does not recompute"
-        prev_hash = wrapper["entry_hash"]
+        prev_hash = wrapper.get("entry_hash", "")
     return True, len(entries), None

@@ -83,6 +83,13 @@ def _echo_report(report) -> int:
     click.echo(f"agent signatures: {agent}")
     if report.contract_hash_valid is not None:
         click.echo(f"contract hash: {'ok' if report.contract_hash_valid else 'FAIL'}")
+    if report.fully_attributed is False:
+        click.secho(
+            f"PARTIAL ATTRIBUTION: {report.agent_verified_count} entries carry a "
+            "verified agent signature but not all do — a per-entry signature may "
+            "have been stripped.",
+            fg="yellow",
+        )
     for m in report.served_model_mismatches:
         click.echo(
             f"NOTE  served_model mismatch at sequence {m['sequence']}: "

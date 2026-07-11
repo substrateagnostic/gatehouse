@@ -55,10 +55,14 @@ def fingerprint_of(public: Ed25519PublicKey) -> str:
 
 
 def verify_signature(public: Ed25519PublicKey, signature_b64: str, message: bytes) -> bool:
+    """Total: any malformed input (bad base64, wrong type, wrong length) is a
+    non-verification, never a raised exception. A verifier that throws on a
+    hostile signature is a denial-of-evidence (Opus review V5d)."""
     try:
         public.verify(base64.b64decode(signature_b64), message)
         return True
-    except InvalidSignature:
+    except (InvalidSignature, ValueError, TypeError):
+        # ValueError covers binascii.Error (bad base64) and bad key/sig length.
         return False
 
 
