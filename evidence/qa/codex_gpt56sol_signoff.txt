@@ -3908,3 +3908,207 @@ bundle_missing_record_and_ndjson: VerificationReport(status='authenticated', cha
 merkle_valid=True, org_signature_valid=True, agent_signatures_valid=None, agent_verified_count=0, contract_hash_valid=None, 
 failing_step=None, served_model_mismatches=[], fully_attributed=None, envelope_valid=None)
 
+exec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "@'
+from pathlib import Path
+from gatehouse.verify import _safe_bundle_path
+base=Path(r'C:\\Users\\agall\\projects\\GATEHOUSE')
+for name in ['.','..','../x','C:foo','C:\\\\Windows\\\\win.ini','/etc/passwd','sub/file','sub\\\\file','\\\\\\\\server\\\\shar
+e\\\\x','CON','foo/../bar']:
+    try: print(repr(name), 'parts=',Path(name).parts,'abs=',Path(name).is_absolute(),'safe=',_safe_bundle_path(base,name))
+    except Exception as e: print(repr(name),'RAISE',type(e).__name__,e)
+'@ | .\\.venv\\Scripts\\python.exe -B -" in C:\Users\agall\projects\GATEHOUSE
+ succeeded in 741ms:
+'.' parts= () abs= False safe= C:\Users\agall\projects\GATEHOUSE
+'..' parts= ('..',) abs= False safe= None
+'../x' parts= ('..', 'x') abs= False safe= None
+'C:foo' parts= ('C:', 'foo') abs= False safe= C:\Users\agall\projects\GATEHOUSE\foo
+'C:\\Windows\\win.ini' parts= ('C:\\', 'Windows', 'win.ini') abs= True safe= None
+'/etc/passwd' parts= ('\\', 'etc', 'passwd') abs= False safe= None
+'sub/file' parts= ('sub', 'file') abs= False safe= C:\Users\agall\projects\GATEHOUSE\sub\file
+'sub\\file' parts= ('sub', 'file') abs= False safe= C:\Users\agall\projects\GATEHOUSE\sub\file
+'\\\\server\\share\\x' parts= ('\\\\server\\share\\', 'x') abs= True safe= None
+'CON' parts= ('CON',) abs= False safe= C:\Users\agall\projects\GATEHOUSE\CON
+'foo/../bar' parts= ('foo', '..', 'bar') abs= False safe= None
+
+exec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "@'
+from pathlib import Path
+from unittest.mock import patch
+from gatehouse.canonical import jcs_bytes
+from gatehouse.keys import AgentKey
+import gatehouse.verify as v
+key=AgentKey.generate()
+original={'version':'2.0.0','schema_version':2,'session':{'session_id':'x'},'entries':[],'merkle_root':''}
+original['org_signature']={'public_key':key.public_b64,'signature':key.sign_b64(jcs_bytes(v.org_signature_block(original)))}
+manifest={'nonfinite':float('nan'),'operator_signature':{'public_key':key.public_b64,'signature':'AAAA'}}
+def read(path): return manifest if path.name=='hash_manifest.json' else original
+with patch.object(v,'_read_json',side_effect=read), patch.object(v,'_read_ndjson',return_value=[]):
+    try: print(v.verify_pair(Path('virtual'),Path('original.json')))
+    except Exception as exc: print('verify_pair_nonfinite_manifest_raises:',type(exc).__name__,str(exc))
+'@ | .\\.venv\\Scripts\\python.exe -B -" in C:\Users\agall\projects\GATEHOUSE
+ succeeded in 736ms:
+verify_pair_nonfinite_manifest_raises: FloatDomainError nan is not representable in JCS
+
+exec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "@'
+import copy
+from gatehouse.canonical import jcs_bytes
+from gatehouse.keys import AgentKey
+import gatehouse.verify as v
+key=AgentKey.generate(); log={'version':'2.0.0','schema_version':2,'session':{'session_id':'x'},'entries':[],'merkle_root':''}
+log['org_signature']={'public_key':key.public_b64,'signature':key.sign_b64(jcs_bytes(v.org_signature_block(log))),'signed_at':
+'A'}
+log['session_seal']={'public_key':key.public_b64,'signature':key.sign_b64(jcs_bytes(log['session'])),'signed_at':'A','covers':
+'session'}
+for label,mut in [('version',lambda x:x.__setitem__('version','forged-version')),('org_signed_at',lambda 
+x:x['org_signature'].__setitem__('signed_at','forged')),('session_signed_at',lambda 
+x:x['session_seal'].__setitem__('signed_at','forged')),('session_covers',lambda 
+x:x['session_seal'].__setitem__('covers','nothing'))]:
+ y=copy.deepcopy(log);mut(y);r=v.verify_audit_log(y);print(label,r.status,r.org_signature_valid,r.envelope_valid)
+'@ | .\\.venv\\Scripts\\python.exe -B -" in C:\Users\agall\projects\GATEHOUSE
+ succeeded in 618ms:
+version authenticated True True
+org_signed_at authenticated True True
+session_signed_at authenticated True True
+session_covers authenticated True True
+
+codex
+Focused probes confirm the strict sequence and base64 fixes, but also reproduce four remaining failures: a session-id-only 
+signed log authenticates; stripping `session_seal` permits coordinated session/contract rewriting; `verify_pair(None, …)` 
+raises; and `verify_pair` certifies a pair whose NDJSON is faithful while its redacted audit log and evidence record disagree.
+Implementation review and focused probes are complete; the remaining work is to present the finding-by-finding verdicts and 
+new gaps.
+  ✓ Read the prior findings, claimed fixes, implementation, and relevant tests
+  ✓ Map each of the ten findings to current code and reproduce key cases
+  ✓ Run a fresh malformed-input totality and protection-boundary sweep
+  → Deliver evidence-backed verdicts and sign-off
+  ✓ Read the prior findings, claimed fixes, implementation, and relevant tests
+  ✓ Map each of the ten findings to current code and reproduce key cases
+  ✓ Run a fresh malformed-input totality and protection-boundary sweep
+  ✓ Deliver evidence-backed verdicts and sign-off
+codex
+The current verifier is not ready for release sign-off. Three observations are fully resolved; seven remain partially 
+resolved.
+
+| # | Verdict | Current file:line | Justification |
+|---|---|---|---|
+| 1 | **RESOLVED** | [verify.py:628](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:628), 
+[verify.py:630](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:630), 
+[verify.py:636](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:636) | `verify_bundle` now requires a verifying 
+manifest seal and rejects a seal whose key differs from the audit-log operator; missing, empty, malformed, and replacement 
+seals fail. |
+| 2 | **PARTIALLY RESOLVED** | [verify.py:655](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:655), 
+[verify.py:663](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:663), 
+[verify.py:680](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:680), 
+[verify.py:689](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:689) | Present NDJSON must equal 
+`audit_log.entries`, and present records are reprojected, but both checks are conditional on file existence at lines 658 and 
+668; a signed manifest omitting both files still returns `authenticated`. |
+| 3 | **RESOLVED** | [verify.py:769](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:769), 
+[verify.py:775](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:775), 
+[redaction.py:73](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/redaction.py:73) | The verifier independently reconstructs 
+the prescribed redaction and requires exact wrapper equality, including preserved authorization, source hash, rechaining, and 
+signature removal. |
+| 4 | **PARTIALLY RESOLVED** | [verify.py:724](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:724), 
+[verify.py:734](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:734), 
+[verify.py:746](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:746), 
+[verify.py:850](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:850) | The original must authenticate and the 
+redacted seal/files/root are checked, but `audit_log.json` is reduced to `.get("merkle_root")` at 
+[verify.py:862](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:862); its entries/session and 
+`evidence_record.json` are never checked against the faithful NDJSON. |
+| 5 | **PARTIALLY RESOLVED** | [verify.py:262](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:262), 
+[verify.py:275](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:275), 
+[chain.py:71](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/chain.py:71) | Boolean/float sequences are correctly rejected, 
+but structural validation requires only a nonempty `session_id` and an entries list; a signed `session={"session_id":"x"}, 
+entries=[]` still authenticates. |
+| 6 | **PARTIALLY RESOLVED** | [evidence.py:81](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:81), 
+[evidence.py:127](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:127), 
+[verify.py:150](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:150), 
+[verify.py:156](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:156) | Native logs receive a full-session seal, 
+but its absence returns `None`, not failure; stripping it and rewriting the session allows the narrow `org_signature` to 
+continue authenticating. |
+| 7 | **PARTIALLY RESOLVED** | [verify.py:317](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:317), 
+[verify.py:320](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:320), 
+[verify.py:326](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:326) | Deleting `contract_hash` now fails, but 
+stripping the optional session seal and changing both contract and hash still authenticates because only recomputation is 
+then enforced. |
+| 8 | **PARTIALLY RESOLVED** | [verify.py:549](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:549), 
+[verify.py:581](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:581), 
+[verify.py:698](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:698), 
+[verify.py:704](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:704) | Bundle traversal and `verify_bundle` 
+totality are fixed, but `verify_pair` has no outer boundary: `Path(redacted_dir)` precedes its narrow `try`, so 
+`verify_pair(None, …)` raises `TypeError`. |
+| 9 | **RESOLVED** | [keys.py:44](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:44), 
+[keys.py:48](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:48), 
+[keys.py:60](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:60), 
+[keys.py:65](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:65) | Keys and signatures now use strict 
+`validate=True` decoding; a `"!!!"`-prefixed valid signature failed in reproduction. |
+| 10 | **PARTIALLY RESOLVED** | [verify.py:66](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:66), 
+[verify.py:647](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:647), 
+[verify.py:511](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:511), 
+[verify.py:523](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:523) | `_fail` now preserves `fully_attributed` 
+and `envelope_valid`, but the same stripped-signature log remains `authenticated` standalone and hard-fails as a bundle; no 
+shared policy or explicit strict-mode API was added. |
+
+### New observations and fresh sweep
+
+- **Redacted pair representations can contradict each other.** Using faithful derived NDJSON but an `audit_log.json` 
+containing forged entries and a forged `evidence_record.json`, with all bytes correctly included in a same-operator signed 
+manifest, `verify_pair` returned `consistent_unattributed`. It never reads the evidence record, and only reads the audit 
+log’s stored root at [verify.py:859](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:859).
+
+- **Required bundle payloads are optional to verification.** Because the NDJSON and evidence-record checks begin with `if 
+…exists()` at [verify.py:658](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:658) and 
+[verify.py:668](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:668), an operational bundle whose signed manifest 
+names only `audit_log.json` reproduced as `authenticated`.
+
+- **`verify_pair` has additional unhandled exceptions.** Besides `None`, a manifest containing a non-finite JSON number and a 
+structurally valid signature block raises `FloatDomainError` while canonicalizing at 
+[verify.py:503](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:503), reached from 
+[verify.py:734](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:734). `verify_audit_log` and `verify_bundle` do 
+have effective outer exception boundaries.
+
+- **Several standalone values remain mutable under an `authenticated` verdict.** Reproduction showed that changing top-level 
+`version`, `org_signature.signed_at`, `session_seal.signed_at`, or `session_seal.covers` preserves authentication. The 
+operator block omits them at [verify.py:95](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:95), while 
+session-seal verification checks only the session bytes at 
+[verify.py:159](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:159).
+
+- **The session-seal construction contradicts its documentation and fix ledger.** The comments specify a signature over 
+`sha256_jcs(session)` at [evidence.py:86](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:86) and 
+[verify.py:151](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:151), but producer and verifier actually sign raw 
+`jcs_bytes(session)` at [evidence.py:92](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:92) and 
+[verify.py:169](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:169). Coverage remains cryptographically sound, 
+but the declared construction is inaccurate.
+
+SIGN-OFF: CHANGES-REQUESTED
+tokens used
+100,470
+The current verifier is not ready for release sign-off. Three observations are fully resolved; seven remain partially resolved.
+
+| # | Verdict | Current file:line | Justification |
+|---|---|---|---|
+| 1 | **RESOLVED** | [verify.py:628](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:628), [verify.py:630](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:630), [verify.py:636](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:636) | `verify_bundle` now requires a verifying manifest seal and rejects a seal whose key differs from the audit-log operator; missing, empty, malformed, and replacement seals fail. |
+| 2 | **PARTIALLY RESOLVED** | [verify.py:655](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:655), [verify.py:663](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:663), [verify.py:680](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:680), [verify.py:689](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:689) | Present NDJSON must equal `audit_log.entries`, and present records are reprojected, but both checks are conditional on file existence at lines 658 and 668; a signed manifest omitting both files still returns `authenticated`. |
+| 3 | **RESOLVED** | [verify.py:769](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:769), [verify.py:775](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:775), [redaction.py:73](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/redaction.py:73) | The verifier independently reconstructs the prescribed redaction and requires exact wrapper equality, including preserved authorization, source hash, rechaining, and signature removal. |
+| 4 | **PARTIALLY RESOLVED** | [verify.py:724](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:724), [verify.py:734](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:734), [verify.py:746](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:746), [verify.py:850](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:850) | The original must authenticate and the redacted seal/files/root are checked, but `audit_log.json` is reduced to `.get("merkle_root")` at [verify.py:862](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:862); its entries/session and `evidence_record.json` are never checked against the faithful NDJSON. |
+| 5 | **PARTIALLY RESOLVED** | [verify.py:262](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:262), [verify.py:275](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:275), [chain.py:71](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/chain.py:71) | Boolean/float sequences are correctly rejected, but structural validation requires only a nonempty `session_id` and an entries list; a signed `session={"session_id":"x"}, entries=[]` still authenticates. |
+| 6 | **PARTIALLY RESOLVED** | [evidence.py:81](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:81), [evidence.py:127](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:127), [verify.py:150](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:150), [verify.py:156](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:156) | Native logs receive a full-session seal, but its absence returns `None`, not failure; stripping it and rewriting the session allows the narrow `org_signature` to continue authenticating. |
+| 7 | **PARTIALLY RESOLVED** | [verify.py:317](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:317), [verify.py:320](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:320), [verify.py:326](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:326) | Deleting `contract_hash` now fails, but stripping the optional session seal and changing both contract and hash still authenticates because only recomputation is then enforced. |
+| 8 | **PARTIALLY RESOLVED** | [verify.py:549](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:549), [verify.py:581](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:581), [verify.py:698](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:698), [verify.py:704](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:704) | Bundle traversal and `verify_bundle` totality are fixed, but `verify_pair` has no outer boundary: `Path(redacted_dir)` precedes its narrow `try`, so `verify_pair(None, …)` raises `TypeError`. |
+| 9 | **RESOLVED** | [keys.py:44](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:44), [keys.py:48](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:48), [keys.py:60](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:60), [keys.py:65](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:65) | Keys and signatures now use strict `validate=True` decoding; a `"!!!"`-prefixed valid signature failed in reproduction. |
+| 10 | **PARTIALLY RESOLVED** | [verify.py:66](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:66), [verify.py:647](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:647), [verify.py:511](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:511), [verify.py:523](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:523) | `_fail` now preserves `fully_attributed` and `envelope_valid`, but the same stripped-signature log remains `authenticated` standalone and hard-fails as a bundle; no shared policy or explicit strict-mode API was added. |
+
+### New observations and fresh sweep
+
+- **Redacted pair representations can contradict each other.** Using faithful derived NDJSON but an `audit_log.json` containing forged entries and a forged `evidence_record.json`, with all bytes correctly included in a same-operator signed manifest, `verify_pair` returned `consistent_unattributed`. It never reads the evidence record, and only reads the audit log’s stored root at [verify.py:859](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:859).
+
+- **Required bundle payloads are optional to verification.** Because the NDJSON and evidence-record checks begin with `if …exists()` at [verify.py:658](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:658) and [verify.py:668](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:668), an operational bundle whose signed manifest names only `audit_log.json` reproduced as `authenticated`.
+
+- **`verify_pair` has additional unhandled exceptions.** Besides `None`, a manifest containing a non-finite JSON number and a structurally valid signature block raises `FloatDomainError` while canonicalizing at [verify.py:503](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:503), reached from [verify.py:734](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:734). `verify_audit_log` and `verify_bundle` do have effective outer exception boundaries.
+
+- **Several standalone values remain mutable under an `authenticated` verdict.** Reproduction showed that changing top-level `version`, `org_signature.signed_at`, `session_seal.signed_at`, or `session_seal.covers` preserves authentication. The operator block omits them at [verify.py:95](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:95), while session-seal verification checks only the session bytes at [verify.py:159](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:159).
+
+- **The session-seal construction contradicts its documentation and fix ledger.** The comments specify a signature over `sha256_jcs(session)` at [evidence.py:86](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:86) and [verify.py:151](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:151), but producer and verifier actually sign raw `jcs_bytes(session)` at [evidence.py:92](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:92) and [verify.py:169](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:169). Coverage remains cryptographically sound, but the declared construction is inaccurate.
+
+SIGN-OFF: CHANGES-REQUESTED

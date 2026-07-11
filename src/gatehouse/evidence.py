@@ -83,9 +83,11 @@ def _session_seal(store: SessionStore, session: dict[str, Any]) -> dict[str, Any
     #6). The reference §4.2 operator seal binds only {entry set + a few
     scalars}, leaving intent_contract, human_authorizer, org_id, etc. unsigned —
     so a standalone log could be re-scoped post-seal. This additional operator
-    signature covers ``sha256_jcs`` of the entire session, closing that gap for
-    gatehouse's produce+verify path. It is an EXTRA top-level field the
-    reference verifier ignores, so byte-for-byte interop (C1) is preserved."""
+    signature is Ed25519 over the RFC 8785 JCS canonical BYTES of the entire
+    session (``jcs_bytes(session)`` — Ed25519 signs the message directly, no
+    SHA-256 prehash), closing that gap for gatehouse's produce+verify path. It is
+    an EXTRA top-level field the reference verifier ignores, so byte-for-byte
+    interop (C1) is preserved."""
     key = store.operator_key()
     return {
         "public_key": key.public_b64,

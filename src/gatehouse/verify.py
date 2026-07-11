@@ -148,7 +148,8 @@ def _verify_org_signature(log: dict[str, Any]) -> Optional[bool]:
 
 
 def _verify_session_seal(log: dict[str, Any]) -> Optional[bool]:
-    """Verify the gatehouse-native envelope seal over ``sha256_jcs(session)``.
+    """Verify the gatehouse-native envelope seal — Ed25519 over ``jcs_bytes(session)``
+    (the JCS canonical bytes of the session; Ed25519 signs directly, no prehash).
     None when absent (foreign/reference log); True/False when present. When an
     operator ``org_signature`` is also present, the envelope seal MUST be by the
     same operator key (else it is a foreign seal spliced in) — a key mismatch is
@@ -161,6 +162,9 @@ def _verify_session_seal(log: dict[str, Any]) -> Optional[bool]:
         return False
     org = log.get("org_signature")
     if isinstance(org, dict) and org.get("public_key") and seal.get("public_key") != org.get("public_key"):
+        return False
+    # The seal's own claim about what it covers must not be silently altered.
+    if seal.get("covers") not in (None, "session"):
         return False
     try:
         pub = load_public_key_b64(seal.get("public_key"))
@@ -273,8 +277,13 @@ def _core(log: dict[str, Any]) -> dict[str, Any]:
         }
 
     session_obj = log.get("session")
-    if not isinstance(session_obj, dict) or not session_obj.get("session_id"):
-        return _schema_fail("session envelope missing or has no session_id")
+    if not isinstance(session_obj, dict):
+        return _schema_fail("session envelope missing or not an object")
+    # Require the core SessionEnvelope fields (Codex sign-off #5): a signed but
+    # near-empty session must not authenticate.
+    for _required in ("session_id", "org_id", "environment", "initiated_at"):
+        if not session_obj.get(_required):
+            return _schema_fail(f"session envelope missing required field {_required!r}")
     if not isinstance(entries, list):
         return _schema_fail("entries is not a list")
 
@@ -421,9 +430,17 @@ def _report_from_core(core: dict[str, Any]) -> VerificationReport:
 # Public API
 # ---------------------------------------------------------------------------
 
-def verify_audit_log(log: dict[str, Any]) -> VerificationReport:
+def verify_audit_log(log: dict[str, Any], *, strict: bool = False) -> VerificationReport:
     """Verify an AuditLog dict (AER §4.3). Tri-state verdict, F1-strict agent
     signatures, gatehouse-strict Merkle, v2-only.
+
+    ``strict=True`` applies the same policy ``verify_bundle`` applies to a
+    gatehouse bundle (Codex sign-off #10): an otherwise-``authenticated`` log is
+    downgraded to ``failed`` if it is not fully attributed or carries no valid
+    full-envelope ``session_seal``. The default (``strict=False``) stays
+    reference-compatible (a foreign log without an envelope seal still
+    authenticates) and merely SURFACES those via ``fully_attributed`` /
+    ``envelope_valid``.
 
     Total: a malformed log yields a ``failed`` verdict, never a raised
     exception (a verifier that crashes on hostile input is a denial-of-evidence
@@ -434,12 +451,20 @@ def verify_audit_log(log: dict[str, Any]) -> VerificationReport:
             "audit log is not a JSON object", [],
         )
     try:
-        return _report_from_core(_core(log))
+        report = _report_from_core(_core(log))
     except Exception as exc:  # noqa: BLE001 — totality is the contract
         return VerificationReport(
             "failed", False, 0, False, None, None, 0, None,
             f"verifier error on malformed input: {type(exc).__name__}", [],
         )
+    if strict and report.status == "authenticated":
+        if report.fully_attributed is False:
+            report.status = "failed"
+            report.failing_step = "strict: log is not fully attributed"
+        elif report.envelope_valid is not True:
+            report.status = "failed"
+            report.failing_step = "strict: no valid full-envelope session_seal"
+    return report
 
 
 def _attestation_block(log: dict[str, Any], export_timestamp: str) -> dict[str, Any]:
@@ -652,6 +677,23 @@ def _verify_bundle_impl(bundle_dir: Path) -> VerificationReport:
             "(an agent signature was stripped from a sealed bundle)",
         )
 
+    # (4b) A gatehouse OPERATIONAL bundle always ships the full payload set AND
+    # carries a valid full-envelope session_seal. Require both, so a signed
+    # manifest that names only audit_log.json (Codex sign-off, new obs) or a
+    # bundle whose session_seal was stripped (Codex sign-off #6/#7) fails rather
+    # than authenticating.
+    if base.status == "authenticated":
+        if not entries_path.exists():
+            return _fail(base, "operational bundle is missing entries.ndjson")
+        if not record_path.exists():
+            return _fail(base, "operational bundle is missing evidence_record.json")
+        if base.envelope_valid is not True:
+            return _fail(
+                base,
+                "operational bundle has no valid session_seal — the session "
+                "envelope is unprotected (session_seal stripped or invalid)",
+            )
+
     # (5) entries.ndjson MUST equal the verified audit-log entries (Codex #2) —
     # so the NDJSON any downstream check reads is the verified data, not a
     # parallel copy.
@@ -697,12 +739,17 @@ def _verify_bundle_impl(bundle_dir: Path) -> VerificationReport:
 
 def verify_pair(redacted_dir: Path, original_log_path: Path) -> VerificationReport:
     """Confirm a redacted bundle is a FAITHFUL derivation of a sealed original
-    (AER §5, F3). Given the redacted bundle's manifest + derived entries and the
-    original log, check per entry that derived-n binds to source-n, that nothing
-    was dropped/reordered/substituted, that the derived chain self-verifies, and
-    that the manifest's source/derived tips are correct."""
-    redacted_dir = Path(redacted_dir)
+    (AER §5, F3). Total over malformed input (Codex sign-off #8)."""
+    try:
+        return _verify_pair_impl(Path(redacted_dir), Path(original_log_path))
+    except Exception as exc:  # noqa: BLE001 — totality is the contract
+        return VerificationReport(
+            "failed", False, 0, False, None, None, 0, None,
+            f"pair verifier error: {type(exc).__name__}", [],
+        )
 
+
+def _verify_pair_impl(redacted_dir: Path, original_log_path: Path) -> VerificationReport:
     def failed(step: str, chain_valid: bool = False, chain_count: int = 0) -> VerificationReport:
         return VerificationReport(
             "failed", chain_valid, chain_count, False, None, None, 0, None, step, [],
@@ -859,9 +906,12 @@ def verify_pair(redacted_dir: Path, original_log_path: Path) -> VerificationRepo
     red_log_path = redacted_dir / "audit_log.json"
     if red_log_path.exists():
         try:
-            stored_root = _read_json(red_log_path).get("merkle_root")
-        except Exception:
-            stored_root = None
+            red_log = _read_json(red_log_path)
+        except Exception:  # noqa: BLE001
+            return failed("redacted audit_log.json unreadable", chain_valid, chain_count)
+        if not isinstance(red_log, dict):
+            return failed("redacted audit_log.json is not a JSON object", chain_valid, chain_count)
+        stored_root = red_log.get("merkle_root")
         merkle_ok = derived_root is not None and stored_root == derived_root
         if not merkle_ok:
             return failed(
@@ -869,6 +919,33 @@ def verify_pair(redacted_dir: Path, original_log_path: Path) -> VerificationRepo
                 chain_valid,
                 chain_count,
             )
+        # The redacted bundle's THREE representations must AGREE (Codex sign-off,
+        # new obs): audit_log.json entries == the verified derived NDJSON, and
+        # evidence_record.json reprojects from that log. Manifest file hashes are
+        # already checked above; this binds the copies so a same-operator re-seal
+        # cannot ship contradictory representations.
+        if (red_log.get("entries") or []) != derived:
+            return failed(
+                "redacted audit_log.json entries do not equal the derived entries",
+                chain_valid, chain_count,
+            )
+        red_record_path = redacted_dir / "evidence_record.json"
+        if red_record_path.exists():
+            try:
+                red_record = _read_json(red_record_path)
+                from . import evidence
+
+                rebuilt = evidence._project_record(red_log, redacted=True)
+            except Exception:  # noqa: BLE001
+                return failed(
+                    "redacted evidence_record.json could not be reprojected",
+                    chain_valid, chain_count,
+                )
+            if _mask_export_timestamp(red_record) != _mask_export_timestamp(rebuilt):
+                return failed(
+                    "redacted evidence_record.json does not match the projection of the derived log",
+                    chain_valid, chain_count,
+                )
     else:
         # No stored root to check in this bundle; the derived chain (which
         # covers the same entry hashes) has already verified above.

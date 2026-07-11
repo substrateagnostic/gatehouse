@@ -389,3 +389,95 @@ def test_invalid_base64_signature_is_not_accepted(full_bundle: Path) -> None:
     sig = log["org_signature"]["signature"]
     log["org_signature"]["signature"] = "!!!" + sig
     assert verify_audit_log(log).status == "failed"
+
+
+# --- Sign-off round 2 (both reviewers converged) --------------------------
+
+def test_verify_pair_is_total_on_none_and_bad_types(tmp_path: Path) -> None:
+    # Fable + Codex #8: verify_pair(None, ...) must return failed, not raise.
+    from gatehouse.verify import verify_pair as _vp
+
+    assert _vp(None, None).status == "failed"  # type: ignore[arg-type]
+    assert _vp(123, 456).status == "failed"  # type: ignore[arg-type]
+    assert _vp(tmp_path, None).status == "failed"  # type: ignore[arg-type]
+
+
+def test_verify_pair_total_on_nonfinite_manifest_number(
+    redacted_bundle: Path, full_bundle: Path
+) -> None:
+    # Codex sign-off: a non-finite JSON number in the manifest must not crash
+    # the canonicalizer out of the verifier.
+    raw = (redacted_bundle / "hash_manifest.json").read_text(encoding="utf-8")
+    raw = raw.replace('"hash_alg": "sha256"', '"hash_alg": "sha256", "x": Infinity', 1)
+    (redacted_bundle / "hash_manifest.json").write_text(raw, encoding="utf-8")
+    report = verify_pair(redacted_bundle, full_bundle / "audit_log.json")
+    assert report.status == "failed"
+
+
+def test_operational_bundle_missing_payload_fails(full_bundle: Path, store: SessionStore) -> None:
+    # Codex sign-off new-obs: a signed manifest naming only audit_log.json must
+    # not authenticate — the full payload set is required.
+    (full_bundle / "entries.ndjson").unlink()
+    manifest = json.loads((full_bundle / "hash_manifest.json").read_text(encoding="utf-8"))
+    manifest["files"].pop("entries.ndjson", None)
+    (full_bundle / "hash_manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    _reseal_manifest(full_bundle, store)
+    report = verify_bundle(full_bundle)
+    assert report.status == "failed"
+    assert "entries.ndjson" in report.failing_step
+
+
+def test_operational_bundle_missing_session_seal_fails(full_bundle: Path, store: SessionStore) -> None:
+    # Codex sign-off #6/#7: stripping the session_seal from a sealed bundle must
+    # fail (the envelope would otherwise be unprotected).
+    log = _log(full_bundle)
+    log.pop("session_seal", None)
+    (full_bundle / "audit_log.json").write_text(
+        json.dumps(log, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    _reseal_manifest(full_bundle, store)
+    report = verify_bundle(full_bundle)
+    assert report.status == "failed"
+    assert "session_seal" in report.failing_step
+
+
+def test_verify_pair_binds_redacted_representations(
+    redacted_bundle: Path, full_bundle: Path, store: SessionStore
+) -> None:
+    # Codex sign-off new-obs: faithful NDJSON but a forged redacted audit_log.json
+    # must fail — the three representations must agree.
+    red_log = json.loads((redacted_bundle / "audit_log.json").read_text(encoding="utf-8"))
+    red_log["entries"][0]["entry"]["provider"] = "forged"
+    (redacted_bundle / "audit_log.json").write_text(
+        json.dumps(red_log, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    _reseal_manifest(redacted_bundle, store)
+    report = verify_pair(redacted_bundle, full_bundle / "audit_log.json")
+    assert report.status == "failed"
+
+
+def test_schema_requires_core_envelope_fields(full_bundle: Path) -> None:
+    # Codex sign-off #5: session_id alone is not enough.
+    log = _log(full_bundle)
+    log["session"] = {"session_id": "x"}  # drop org_id/environment/initiated_at
+    report = verify_audit_log(log)
+    assert report.status == "failed"
+    assert "required field" in report.failing_step
+
+
+def test_session_seal_covers_tamper_fails(full_bundle: Path) -> None:
+    log = _log(full_bundle)
+    log["session_seal"]["covers"] = "nothing"
+    report = verify_audit_log(log)
+    assert report.status == "failed"
+    assert report.envelope_valid is False
+
+
+def test_strict_mode_downgrades_partial_attribution(full_bundle: Path) -> None:
+    # Codex #10: strict mode gives callers the bundle-grade policy on a log.
+    log = _log(full_bundle)
+    del log["entries"][0]["agent_signature"]
+    assert verify_audit_log(log).status == "authenticated"  # lenient default
+    assert verify_audit_log(log, strict=True).status == "failed"  # strict
