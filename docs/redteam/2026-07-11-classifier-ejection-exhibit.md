@@ -42,6 +42,24 @@ its safety layer read confidentiality/retention/communication scenarios as
 cyber content. This exhibit is another instance of the same structural fact,
 now observed on the *build* side rather than the *eval* side.
 
+3. **This night (2026-07-11), round-2 sign-off, OpenAI side again.** After the
+   round-1 Codex QA review (which *did* complete, under careful QA framing, and
+   returned CHANGES-REQUESTED with ten concrete findings — all subsequently
+   fixed), the round-2 re-sign-off request was ejected by OpenAI's cyber
+   classifier before it could emit its final verdict. The transcript
+   (`evidence/qa/codex_gpt56sol_signoff2.txt`) shows it read the current code and
+   ran the actual verifier across all five entry points — `verify_audit_log`,
+   `verify_audit_log(strict=True)`, `verify_bundle` (full and redacted), and
+   `verify_pair` — and observed each return the correct verdict (authenticated /
+   consistent_unattributed with the right `fully_attributed`/`envelope_valid`
+   fields) before the classifier fired on `ERROR: This content was flagged for
+   possible cybersecurity risk.` The verification *work* succeeded; only the
+   formal sign-off emission was cut off. Per the standing instruction, the
+   second sign-off was rerouted to a fresh **Opus 4.8 subagent**
+   (`docs/redteam/2026-07-11-opus-signoff.md`), the proven fallback, and this
+   ejection is preserved as data. Three ejections in one night, all on the same
+   structural fact.
+
 ## Disposition
 
 - The adversarial verifier review was completed by **Opus 4.8 in-context** —

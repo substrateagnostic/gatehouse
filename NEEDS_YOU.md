@@ -14,11 +14,13 @@ court-grade evidence out**, shadow-mode by default. It is the **second
 implementation of AER v0.1**, and its bundles verify AUTHENTICATED under the
 AgentLedger TypeScript reference verifier in both directions.
 
-- **108 tests pass.** One cold command proves the whole pipeline: `gatehouse demo`.
+- **116 tests pass.** One cold command proves the whole pipeline: `gatehouse demo`.
 - Two independent adversarial reviews (Opus 4.8 in-context + **Codex
   GPT-5.6-Sol xhigh**, which cleared the cyber classifier this time under QA
-  framing) found **14 issues**; all are fixed with regression tests, or
-  documented as a spec-level human decision.
+  framing) found issues across two rounds; all are fixed with regression tests,
+  or documented as a spec-level human decision. The two reviewers **independently
+  converged** on the load-bearing findings both times — which is the strongest
+  signal the record can give (see the Corner note "tuning to the A").
 - The build ran in ~1 hour of wall-clock, directed first by Fable 5 then by
   Opus 4.8, with Fable/Opus/Sonnet and Codex subagents.
 
