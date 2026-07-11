@@ -1,0 +1,15 @@
+﻿GATEHOUSE demo cold run + TS reference verifier conformance — 2026-07-11 (overnight run)
+Command 1: gatehouse demo   (no keys, no network; stub upstream reroutes fable->sonnet)
+Result: session opened; proxied call disposition=flag (request text mentioned 'privileged');
+dual bundles produced; gatehouse verify: AUTHENTICATED, served_model mismatch surfaced at seq 0;
+pair binding ok.
+
+Command 2: node packages/cli/dist/index.js verify <demo>/bundle-full/audit_log.json
+Result: AUTHENTICATED — all verifications passed. EXIT 0   (C1)
+
+Command 3: node packages/cli/dist/index.js verify-pair <demo>/bundle-redacted <demo>/bundle-full/audit_log.json
+Result: faithful derivation; every derived entry binds; nothing dropped or reordered. EXIT 0   (C2)
+
+The bundle contains served_model on model_call entries — the TS reference verifier
+round-trips it (JSON.parse, JCS recomputation) and still authenticates: the extension
+is interop-safe as recorded in docs/aer-feedback.md item 12.

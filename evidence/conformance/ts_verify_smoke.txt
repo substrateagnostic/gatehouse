@@ -1,0 +1,95 @@
+GATEHOUSE -> AgentLedger TS reference CLI conformance smoke
+Captured: 2026-07-11T05:47:20Z
+TS CLI: C:/Users/agall/agentledger/packages/cli/dist/index.js
+Bundle produced by gatehouse.evidence.export_bundle (conftest fixture session:
+  5 entries incl. served_model stepdown, structured intent-contract constraint)
+============================================================
+
+$ node packages/cli/dist/index.js verify <full-bundle>/audit_log.json
+
+AgentLedger Verification
+──────────────────────────────────────────────────
+
+ℹ Session: 9ec85a6d-1b0f-4264-9c09-9cf6fc7fa5d3
+ℹ Organization: gatehouse-test
+ℹ Agent: gatehouse-test-agent
+ℹ Schema: v2 (jcs)
+ℹ Entries: 5
+
+Hash Chain Verification
+✓ Chain integrity verified (5 entries)
+
+Merkle Tree Verification
+✓ Merkle root verified
+
+Signature Verification
+✓ Organization signature verified
+  Signed at: 2026-07-11T05:47:20.639Z
+
+Agent Signature Verification
+✓ Agent signatures verified (5 entries)
+  Agent: sha256:e7b8b5426443e953c78532bd7f4ee4d14a0568e0f50b2da2a5c73fa3064f24ba
+
+──────────────────────────────────────────────────
+
+✓ AUTHENTICATED — all verifications passed
+  A valid operator signature attributes this record.
+
+-> exit code: 0
+
+============================================================
+$ node packages/cli/dist/index.js verify-pair <redacted-bundle> <full-bundle>/audit_log.json
+
+AgentLedger Bundle Pair Verification
+──────────────────────────────────────────────────
+
+ℹ Redacted bundle: C:\Users\agall\projects\GATEHOUSE\evidence\conformance\_smoke\bundle-redacted
+ℹ Original log: C:\Users\agall\projects\GATEHOUSE\evidence\conformance\_smoke\bundle-full\audit_log.json
+
+Pair binding
+ℹ Source entries: 5
+ℹ Derived entries: 5
+
+✓ The redacted bundle is a faithful derivation of the original
+  Every derived entry binds to its source entry; nothing dropped or reordered.
+
+-> exit code: 0
+
+============================================================
+$ node packages/cli/dist/index.js verify <redacted-bundle>/audit_log.json
+
+AgentLedger Verification
+──────────────────────────────────────────────────
+
+ℹ Session: 9ec85a6d-1b0f-4264-9c09-9cf6fc7fa5d3
+ℹ Organization: gatehouse-test
+ℹ Agent: gatehouse-test-agent
+ℹ Schema: v2 (jcs)
+ℹ Entries: 5
+
+Hash Chain Verification
+✓ Chain integrity verified (5 entries)
+
+Merkle Tree Verification
+✓ Merkle root verified
+
+Signature Verification
+! No organization signature present
+
+Agent Signature Verification
+! No per-entry agent signatures present
+
+──────────────────────────────────────────────────
+
+⚠ UNATTRIBUTED — chain and Merkle root are internally consistent,
+  but this log carries NO valid operator signature.
+  Per AER §8, treat it as an unattributed log: it has evidentiary
+  value, but nothing binds it to an operator. It is NOT authenticated.
+
+-> exit code: 0
+
+============================================================
+RESULT: full bundle AUTHENTICATED (exit 0); verify-pair faithful (exit 0);
+        redacted log UNATTRIBUTED (exit 0). Cross-implementation conformance
+        C1 + C2 satisfied: the TS reference verifier accepts gatehouse output,
+        including the served_model extension field (round-trips via JSON.parse).

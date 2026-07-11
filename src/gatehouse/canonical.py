@@ -22,9 +22,15 @@ def jcs_bytes(obj: Any) -> bytes:
     """Canonical RFC 8785 bytes for *obj*.
 
     Raises CanonicalizationError on non-serializable input, including
-    strings containing lone surrogates (F8: reject, never mangle).
+    strings containing lone surrogates (F8: reject, never mangle). rfc8785
+    raises UnicodeEncodeError instead when the lone surrogate is in a dict
+    KEY (it surfaces from the UTF-16BE key sort); normalize so callers can
+    rely on one exception type (aer-feedback #16).
     """
-    return rfc8785.dumps(obj)
+    try:
+        return rfc8785.dumps(obj)
+    except UnicodeEncodeError as exc:
+        raise CanonicalizationError(f"unpaired surrogate in object key: {exc}") from exc
 
 
 def sha256_hex(data: bytes) -> str:
