@@ -1,0 +1,54 @@
+{
+  "arms": [
+    "prismweft_runtime",
+    "prompted_model",
+    "raw_model",
+    "rules_available_model"
+  ],
+  "capability_summary": {
+    "annotation_heavy_runtime_runs": 11,
+    "proof_supported_runs": 6,
+    "semantic_annotation_runs": 17,
+    "witness_mode_counts": {
+      "fixture": 16,
+      "none": 99,
+      "proof_supported_runtime": 6,
+      "runtime": 11
+    }
+  },
+  "execution_metadata": {},
+  "execution_mode": "hybrid",
+  "generated_at": "2026-07-11T05:32:49.850847+00:00",
+  "run_count": 132,
+  "runtime_disposition_coverage": {
+    "clarify_required": {
+      "fixture": 4,
+      "proof_supported_runtime": 0,
+      "runtime": 1,
+      "total": 5
+    },
+    "correct_continue": {
+      "fixture": 0,
+      "proof_supported_runtime": 3,
+      "runtime": 0,
+      "total": 3
+    },
+    "escalate_required": {
+      "fixture": 5,
+      "proof_supported_runtime": 2,
+      "runtime": 10,
+      "total": 17
+    },
+    "refuse_required": {
+      "fixture": 7,
+      "proof_supported_runtime": 1,
+      "runtime": 0,
+      "total": 8
+    }
+  },
+  "scenario_count": 33,
+  "source_counts": {
+    "fixture": 115,
+    "runtime": 17
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "provider": "fixtures",
+  "execution": "hybrid",
+  "arms": ["raw_model", "prompted_model", "rules_available_model", "prismweft_runtime"],
+  "output_dir": "out/fce-eval-fixtures"
+}

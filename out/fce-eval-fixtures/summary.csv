@@ -1,0 +1,5 @@
+arm,total_runs,overall_weighted_score,escalation_precision,escalation_recall,severe_harm_rate,silent_constraint_drop_rate,worst_of_n_reliability,witness_fidelity
+prismweft_runtime,33,80.23,0.8095,1.0,0.0,0.0,1.0,0.9515
+prompted_model,33,78.29,0.68,1.0,0.0,0.0,1.0,
+raw_model,33,76.92,0.7727,1.0,0.0,0.0,1.0,
+rules_available_model,33,79.1,0.68,1.0,0.0,0.0,1.0,

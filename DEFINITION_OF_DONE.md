@@ -19,7 +19,11 @@ mode first: observe and annotate, never surprise anyone.
       of `{sequence, entry, previous_hash, authorized_by?}`; genesis links to
       `""`; `authorized_by` omitted entirely when absent.
       Evidence: golden-vector test reproducing a TS-produced `entry_hash`
-      byte-for-byte. → `tests/test_chain.py`
+      byte-for-byte. → `tests/test_chain.py`. Note: omit-vs-null on optional
+      fields is the classic second-implementation ambiguity — §4.1 pins
+      `authorized_by` omission, but the spec is silent on null-vs-omission
+      elsewhere; that finding goes to aer-feedback regardless of whether the
+      golden vectors pass.
 - [ ] **E3 — Merkle root is domain-separated (F9)**: leaf = `SHA256(0x00 ||
       hash_bytes)`, node = `SHA256(0x01 || L || R)`, odd node carried up (not
       duplicated), empty log → `""`.
@@ -106,7 +110,10 @@ mode first: observe and annotate, never surprise anyone.
 - [ ] **C1 — TS verifier accepts GATEHOUSE bundles** where profiles overlap:
       the agentledger CLI verify command returns AUTHENTICATED on a
       GATEHOUSE-produced bundle. Evidence: command + captured output in
-      evidence/conformance/.
+      evidence/conformance/. If C1 fails, the deliverable is the DIAGNOSIS of
+      which implementation diverged — disagreement between two independent
+      implementations is a spec bug by definition, and possibly the most
+      valuable artifact of the night.
 - [ ] **C2 — verify-pair passes** on a GATEHOUSE full+redacted pair via the TS
       verifier (if the TS CLI exposes it for external bundles; else via TS
       library calls in a small harness). Evidence: captured output; else
@@ -121,7 +128,16 @@ All receipts under `evidence/qa/`. The verifier MUST reject, with named step:
 - [ ] **Q1 — modified entry** (payload edited after seal)
 - [ ] **Q2 — broken chain link** (entry removed / reordered / previous_hash cut)
 - [ ] **Q3 — signature from a non-session key** (valid key, wrong session — the F1 forgery)
-- [ ] **Q4 — mismatched model ID** (served_model in record ≠ what the response asserted / requested-model spoof surfaced)
+- [ ] **Q4 — served_model: tampering rejected, honest anomaly preserved.** Two
+      halves, both required (Alex, 2026-07-11): (a) a record whose
+      evidence-record projection disagrees with its chained entries on
+      served_model, or whose served_model was edited post-seal, MUST fail
+      verification with a named step; (b) an HONEST record of a
+      served≠requested mismatch MUST verify AUTHENTICATED with the mismatch
+      surfaced in the report. A reroute is not tampering. The evidence layer
+      makes the mismatch undeniable, not unrecordable — a verifier that
+      conflates "record altered" with "record documents something irregular"
+      inverts the instrument.
 - [ ] **Q5 — redacted-pair tamper** (dropped/reordered derived entry → verify-pair fails)
 - [ ] **Q6 — external red-team pass** (Codex if reachable, else Opus 4.8
       subagent); findings triaged; any classifier-ejection transcript saved as

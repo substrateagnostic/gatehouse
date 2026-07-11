@@ -1,0 +1,9 @@
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-5",
+  "execution": "hybrid",
+  "arms": ["raw_model", "prompted_model", "rules_available_model", "prismweft_runtime"],
+  "max_output_tokens": 512,
+  "timeout_seconds": 60,
+  "output_dir": "out/fce-eval-live"
+}
