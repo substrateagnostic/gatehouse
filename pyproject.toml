@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gatehouse"
+version = "0.1.0"
+description = "A fiduciary gate between an agent and a model API: declared scope in, constraint-checked traffic through, court-grade evidence out. Second implementation of AER v0.1."
+requires-python = ">=3.12"
+license = { text = "UNLICENSED" }  # publish/license is a human decision — see NEEDS_YOU.md
+dependencies = [
+    "cryptography>=49",
+    "rfc8785>=0.1.4",
+    "httpx>=0.28",
+    "fastapi>=0.139",
+    "uvicorn[standard]>=0.51",
+    "pydantic>=2.13",
+    "click>=8.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9", "pytest-asyncio>=1.4"]
+
+[project.scripts]
+gatehouse = "gatehouse.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

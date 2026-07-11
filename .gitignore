@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+# session data and keys are evidence, but live keys never enter git
+var/
+*.key
+.env
