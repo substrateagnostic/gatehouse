@@ -20,6 +20,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=9", "pytest-asyncio>=1.4"]
+# The check layer / proxy / eval additionally require the FCE runtime (package
+# 'fiduciary'), which is NOT published to PyPI and has no license yet. Install
+# it editable from the sibling repo:
+#   pip install -e ../fiduciary-constraint-evaluation
+# The evidence/verify/produce paths and their tests do not need it.
 
 [project.scripts]
 gatehouse = "gatehouse.cli:main"

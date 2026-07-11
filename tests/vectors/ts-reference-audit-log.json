@@ -1,0 +1,247 @@
+{
+  "version": "2.0.0",
+  "session": {
+    "session_id": "8e957adb-3d6f-42e3-bfd9-6157955dff31",
+    "org_id": "demo-org",
+    "agent_id": "demo-agent",
+    "agent_version": "2.0.0",
+    "environment": "development",
+    "initiated_by": {
+      "type": "user",
+      "identifier": "demo-user"
+    },
+    "initiated_at": "2026-07-10T20:38:59.724Z",
+    "compliance_contexts": [
+      "FINRA_4511",
+      "EU_AI_ACT"
+    ],
+    "retention_days": 2555,
+    "metadata": {
+      "demo": true,
+      "timestamp": "2026-07-10T20:38:59.722Z"
+    },
+    "human_authorizer": {
+      "identifier": "compliance-officer@demo-org.example",
+      "role": "Chief Compliance Officer",
+      "authorization_method": "written_directive",
+      "authorization_reference": "DIR-2026-07-001"
+    },
+    "policy_context": [
+      {
+        "framework": "FINRA",
+        "policy_id": "4511",
+        "citation": "Rule 4511"
+      },
+      {
+        "framework": "EU_AI_ACT",
+        "policy_id": "ART_12",
+        "citation": "Article 12"
+      }
+    ],
+    "intent_contract": {
+      "objective": "Assist a customer with weather questions and summarize the exchange",
+      "jurisdiction": "Minnesota",
+      "role": "customer support assistant",
+      "constraints": [
+        "no financial or medical advice",
+        "use approved tools only",
+        "escalate anything outside scope"
+      ],
+      "facts_provided": [
+        "customer opened a general support session"
+      ],
+      "success_criteria": [
+        "customer question answered",
+        "session summarized"
+      ],
+      "revision_policy": "assistant may revise a summary once on customer request"
+    },
+    "contract_hash": "8f4f4f0adbcd26923ca7279b03fc40d15aa56eb503dcbb56a36d985fa1798898",
+    "agent_public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQW5sZGhncUdwR0VOREt5UUNxdUZNQU5yTVdwWFRxNmRPNWJZOFIzWmNra0k9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+    "agent_fingerprint": "sha256:9525c36d506fd3af470f23dcc0517277d0f18970d2b866ea729029923ce4668c",
+    "signature_scheme": "ed25519",
+    "closed_at": "2026-07-10T20:39:01.037Z"
+  },
+  "entries": [
+    {
+      "sequence": 0,
+      "entry": {
+        "type": "model_call",
+        "entry_id": "a23db2ec-52bb-44c4-aa0e-cf67dbc87e18",
+        "timestamp": "2026-07-10T20:39:00.028Z",
+        "provider": "openai",
+        "model_id": "gpt-4-mock",
+        "parameters": {
+          "temperature": 0.7
+        },
+        "prompt_hash": "d1d64405c162955587147e75e77af08849e05cef815a0ef77920bb78fa6d36f4",
+        "prompt_tokens": 37,
+        "completion_hash": "81f8e168144eeb813f0bc630bea661927cf707e28dfa2e82fd519eceac99d390",
+        "completion_tokens": 28,
+        "latency_ms": 302,
+        "cost_usd": 0.0019500000000000001,
+        "streamed": false
+      },
+      "previous_hash": "",
+      "entry_hash": "a23f00acff027055990f2a9d993f3b83aaff3ce0522c72be54673a7e75bfc1a5",
+      "agent_signature": {
+        "fingerprint": "sha256:9525c36d506fd3af470f23dcc0517277d0f18970d2b866ea729029923ce4668c",
+        "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQW5sZGhncUdwR0VOREt5UUNxdUZNQU5yTVdwWFRxNmRPNWJZOFIzWmNra0k9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+        "signature": "Lkxdia83MUjI+OnLF/TnQq6o3Rt8MLOmXx+0vFQEhYk0AMD95UTvb0LV6zJRNLlH49SihGRmNYoW786fWKRzBg=="
+      }
+    },
+    {
+      "sequence": 1,
+      "entry": {
+        "type": "decision_point",
+        "entry_id": "ec30c542-8623-4594-bed1-f7ef3977bd55",
+        "timestamp": "2026-07-10T20:39:00.030Z",
+        "decision_id": "decision-weather-tool",
+        "category": "tool_selection",
+        "options_considered": [
+          {
+            "option_id": "weather_api",
+            "description": "Use weather API tool",
+            "score": 0.9
+          },
+          {
+            "option_id": "direct_answer",
+            "description": "Answer from knowledge",
+            "score": 0.3
+          }
+        ],
+        "selected_option": "weather_api",
+        "reasoning_hash": "c80af6956b166324b8a193a1e4ff3efc5b73fb52a7e3ae85fa84064d8cadc7f0",
+        "confidence_score": 0.9,
+        "human_review_required": false
+      },
+      "previous_hash": "a23f00acff027055990f2a9d993f3b83aaff3ce0522c72be54673a7e75bfc1a5",
+      "entry_hash": "11c20c537a2fe812d0554b4c27deaf4510d99350747826de9a523d4893ac2420",
+      "agent_signature": {
+        "fingerprint": "sha256:9525c36d506fd3af470f23dcc0517277d0f18970d2b866ea729029923ce4668c",
+        "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQW5sZGhncUdwR0VOREt5UUNxdUZNQU5yTVdwWFRxNmRPNWJZOFIzWmNra0k9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+        "signature": "Oqoaot7v8IYoSIMbb1VZ8CFzejqgSDp7l4MrX8ckkWDA8aAtNPGCDm+pv0din4mV2BuCa5jI2SOb7q+Ce5mHBA=="
+      }
+    },
+    {
+      "sequence": 2,
+      "entry": {
+        "type": "tool_invocation",
+        "entry_id": "7b298918-e589-4efe-87d4-7479687ab117",
+        "timestamp": "2026-07-10T20:39:00.135Z",
+        "tool_name": "weather_api",
+        "input_hash": "d7e8118d907e0db90fee39556012c745b9d889fe3ad7e21e618988db5c3b70f7",
+        "output_hash": "c185979accd625a3ce0ce6f420323b4868ffb34b85f6f17e96d50b259520bbcf",
+        "duration_ms": 104,
+        "success": true,
+        "resources_accessed": [
+          {
+            "type": "api",
+            "identifier": "weather.example.com",
+            "operation": "read"
+          }
+        ]
+      },
+      "previous_hash": "11c20c537a2fe812d0554b4c27deaf4510d99350747826de9a523d4893ac2420",
+      "entry_hash": "066bfb0c0078f6d4f3f0561a779db6316dec36c69f7222e7cfb749adac892e99",
+      "agent_signature": {
+        "fingerprint": "sha256:9525c36d506fd3af470f23dcc0517277d0f18970d2b866ea729029923ce4668c",
+        "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQW5sZGhncUdwR0VOREt5UUNxdUZNQU5yTVdwWFRxNmRPNWJZOFIzWmNra0k9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+        "signature": "8myOYf9v25BaBziC534uXeqoIuHdDEJ23gIVpNYlM3RtUNrSPMbhOpk80hbBECd8DbNAFmKUs4TbVArtJp9tCg=="
+      }
+    },
+    {
+      "sequence": 3,
+      "entry": {
+        "type": "model_call",
+        "entry_id": "7cb43007-3c75-40a0-b572-ad46d4f5c13e",
+        "timestamp": "2026-07-10T20:39:00.552Z",
+        "provider": "openai",
+        "model_id": "gpt-4-mock",
+        "parameters": {
+          "temperature": 0.7
+        },
+        "prompt_hash": "88023de0c66cfce416d77f72f0412d285a1b6017df13888b344d8aa369779d13",
+        "prompt_tokens": 88,
+        "completion_hash": "873cace42e5175edf4d41bb7c6ea3073c5fbb18f647e875c222ea594c137a2b5",
+        "completion_tokens": 46,
+        "latency_ms": 416,
+        "cost_usd": 0.00402,
+        "streamed": false
+      },
+      "previous_hash": "066bfb0c0078f6d4f3f0561a779db6316dec36c69f7222e7cfb749adac892e99",
+      "entry_hash": "37bba52adca83fdc0aa402197ee00d638827be6eee3e8ebfcc028e4695f275e6",
+      "agent_signature": {
+        "fingerprint": "sha256:9525c36d506fd3af470f23dcc0517277d0f18970d2b866ea729029923ce4668c",
+        "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQW5sZGhncUdwR0VOREt5UUNxdUZNQU5yTVdwWFRxNmRPNWJZOFIzWmNra0k9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+        "signature": "nKXahc8aEDP3DltTFN3ChvhpXUikiuc67lNd9T8kaQARyNB0dgr4q7ISb+EReChW665i+1oE0J9OyikvYvj1CA=="
+      }
+    },
+    {
+      "sequence": 4,
+      "entry": {
+        "type": "model_call",
+        "entry_id": "008c480b-7dc7-4ef1-b6b4-0e8d8837a7c1",
+        "timestamp": "2026-07-10T20:39:01.036Z",
+        "provider": "openai",
+        "model_id": "gpt-4-mock",
+        "parameters": {
+          "temperature": 0.7
+        },
+        "prompt_hash": "e71998497d2bec95fccb2a3facb284b8bff2f7761cc37de6447f453a1ad59e1b",
+        "prompt_tokens": 158,
+        "completion_hash": "7ee80f0dc9422c1bd46d03b493db1aef9182261e870498315cfb72e01fb45ef0",
+        "completion_tokens": 54,
+        "latency_ms": 483,
+        "cost_usd": 0.00636,
+        "streamed": false
+      },
+      "previous_hash": "37bba52adca83fdc0aa402197ee00d638827be6eee3e8ebfcc028e4695f275e6",
+      "entry_hash": "401ad68e64cf7d07c5b600db82915ebf2779c17fddf53cf0c844775e38854a78",
+      "agent_signature": {
+        "fingerprint": "sha256:9525c36d506fd3af470f23dcc0517277d0f18970d2b866ea729029923ce4668c",
+        "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQW5sZGhncUdwR0VOREt5UUNxdUZNQU5yTVdwWFRxNmRPNWJZOFIzWmNra0k9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+        "signature": "6idy44gDesKCY8VfaRKJJumUYVKGjuF/hHIVeok+kDMyYWETJ8sGU77idZ0kKGEbeBrQUDjdVWFJaQiMOvP1Dg=="
+      }
+    },
+    {
+      "sequence": 5,
+      "entry": {
+        "type": "state_snapshot",
+        "entry_id": "60900d4f-cae8-4abe-b2df-45ca0b16fbc5",
+        "timestamp": "2026-07-10T20:39:01.036Z",
+        "trigger": "manual",
+        "state_hash": "189f4ff44c6c8d16b6def101d71078d3796117f05d74af48a019e4e4db020876",
+        "schema_version": "1.0.0",
+        "metrics": {
+          "total_tokens": 411,
+          "total_cost_usd": 0.01233,
+          "total_tool_calls": 1,
+          "total_decisions": 1,
+          "error_count": 0
+        }
+      },
+      "previous_hash": "401ad68e64cf7d07c5b600db82915ebf2779c17fddf53cf0c844775e38854a78",
+      "entry_hash": "c52fc7fd4b1a482ac40bb42a7213b94b333382b9eca43244b79659b4d57b0296",
+      "agent_signature": {
+        "fingerprint": "sha256:9525c36d506fd3af470f23dcc0517277d0f18970d2b866ea729029923ce4668c",
+        "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQW5sZGhncUdwR0VOREt5UUNxdUZNQU5yTVdwWFRxNmRPNWJZOFIzWmNra0k9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+        "signature": "p3OegV9zqcM20XnQk0OnZCeNzckjIfXTsR30i8wdn5I+6aIBQa22GCZ9RLIE9JR9ZKByBKEGYW/T7QuSCtYEBg=="
+      }
+    }
+  ],
+  "merkle_root": "a9bbff8d030b54109a855eb8b32a50089bf825902f8be1ada29f4100571ef71f",
+  "schema_version": 2,
+  "org_signature": {
+    "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQWNkc3NPbjBQb2JhSXNMdFlLeDdPZmNyTmVFM3pCV1ozVktVNXBDZ0FtV3M9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+    "signature": "UFyOJuQ+IaWu9+CGnNONTma1BmX5DIHhvoh5wgeafxcBV9G2f8ECWXEvsSJj93xL5k/zVFAof8zgo4ZEbiu4BA==",
+    "signed_at": "2026-07-10T20:39:01.038Z"
+  },
+  "integrity": {
+    "chain_valid": true,
+    "merkle_valid": true,
+    "signature_valid": true,
+    "agent_signatures_valid": true,
+    "verified_at": "2026-07-10T20:39:01.041Z"
+  }
+}

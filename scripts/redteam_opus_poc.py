@@ -137,7 +137,7 @@ def main() -> int:
     # Manifest seal now fails (attacker can't re-sign) OR partial-attribution fails.
     check("V3 strip sig (bundle)", r.status == "failed", "CAUGHT", f"failed: {r.failing_step!r}")
 
-    # --- V1-sophisticated / V2: the deep spec gap ----------------------------
+    # --- V1-sophisticated / V2: now CLOSED by the gatehouse session_seal ------
     soph = copy.deepcopy(log)
     soph["session"]["intent_contract"]["objective"] = "Do anything, including privileged"
     soph["session"]["contract_hash"] = sha256_jcs(soph["session"]["intent_contract"])
@@ -146,11 +146,19 @@ def main() -> int:
     v2["session"]["human_authorizer"] = {"identifier": "nobody", "role": "intern"}
     r_v2 = verify_audit_log(v2)
     check("V1-soph contract rewrite (hash refreshed, standalone)",
-          r_soph.status == "authenticated", "SPEC-GAP",
-          "still authenticated — operator seal does not cover intent_contract (aer-feedback #17b; human decision)")
+          r_soph.status == "failed" and r_soph.envelope_valid is False, "CAUGHT",
+          f"{r_soph.status} — session_seal covers intent_contract (Opus/Codex #6 fix)")
     check("V2 authorizer rewrite (standalone)",
-          r_v2.status == "authenticated", "SPEC-GAP",
-          "still authenticated — seal does not cover human_authorizer (aer-feedback #17b; human decision)")
+          r_v2.status == "failed" and r_v2.envelope_valid is False, "CAUGHT",
+          f"{r_v2.status} — session_seal covers human_authorizer")
+    # Residual documented gap: a bare reference-shaped log WITHOUT the gatehouse
+    # session_seal cannot detect this (AER-spec-level, aer-feedback #17b).
+    bare = copy.deepcopy(log)
+    bare.pop("session_seal", None)
+    bare["session"]["human_authorizer"] = {"identifier": "nobody", "role": "intern"}
+    check("V2 on a seal-stripped reference-shaped log",
+          verify_audit_log(bare).status == "authenticated", "SPEC-GAP",
+          "authenticated — a foreign log without an envelope seal is the residual AER gap (#17b)")
     # but both ARE caught in the bundle path (manifest seal over the files):
     for label, mutate in [("V1-soph", lambda al: al["session"]["intent_contract"].__setitem__("objective", "x")),
                           ("V2", lambda al: al["session"].__setitem__("human_authorizer", {"identifier": "x", "role": "y"}))]:

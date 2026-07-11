@@ -27,10 +27,10 @@ from gatehouse.models import (
 )
 from gatehouse.store import SessionStore
 
-# Golden fixtures produced by the TypeScript reference implementation.
-TS_DEMO_AUDIT_LOG = Path(
-    r"C:\Users\agall\agentledger\examples\demo\output\audit-log.json"
-)
+# Golden fixture produced by the TypeScript reference implementation, vendored
+# into the repo (tests/vectors/) so the byte-for-byte conformance tests are
+# self-contained on a gatehouse-only clone (Fable review E2/E3).
+TS_DEMO_AUDIT_LOG = Path(__file__).parent / "vectors" / "ts-reference-audit-log.json"
 
 
 @pytest.fixture

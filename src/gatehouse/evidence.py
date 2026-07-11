@@ -25,9 +25,15 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .canonical import jcs_bytes, sha256_hex
-from .chain import chained_entry
 from .merkle import merkle_root as compute_merkle_root
 from .models import now_rfc3339
+from .redaction import (
+    REDACTED_VALUE,
+    REDACTION_RULE,
+    derive_redacted_entries as _derive_redacted_entries,
+    redact_intent_contract as _redact_intent_contract,
+    redact_metadata as _redact_metadata,
+)
 from .store import SessionStore
 from .verify import _attestation_block, org_signature_block
 
@@ -40,85 +46,12 @@ __all__ = [
 ]
 
 AER_VERSION = "0.1"
-REDACTED_VALUE = "[REDACTED]"
-REDACTION_RULE = "aer-0.1-basic"
 
 
 # ---------------------------------------------------------------------------
-# Redaction (aer-0.1-basic) — mirrors storage.ts redactEntry/redactIntentContract
+# Redaction (aer-0.1-basic) — transforms live in redaction.py, shared with the
+# verifier so verify_pair reconstructs the same expected redaction (Codex #3).
 # ---------------------------------------------------------------------------
-
-def _redact_entry(entry: dict[str, Any]) -> dict[str, Any]:
-    """Replace free-text/sensitive values with ``[REDACTED]`` while preserving
-    structure, type, names, status, timestamps, and every hash (AER §5(1))."""
-    e = copy.deepcopy(entry)
-    t = e.get("type")
-    if t == "model_call":
-        if e.get("error"):
-            e["error"]["message"] = REDACTED_VALUE
-    elif t == "tool_invocation":
-        if e.get("error"):
-            e["error"]["message"] = REDACTED_VALUE
-        if e.get("resources_accessed"):
-            e["resources_accessed"] = [
-                {**r, "identifier": REDACTED_VALUE} for r in e["resources_accessed"]
-            ]
-    elif t == "decision_point":
-        e["options_considered"] = [
-            {**o, "description": REDACTED_VALUE} for o in e.get("options_considered", [])
-        ]
-    elif t == "content_reference":
-        if e.get("storage_uri"):
-            e["storage_uri"] = REDACTED_VALUE
-    return e
-
-
-def _redact_intent_contract(contract: dict[str, Any]) -> dict[str, Any]:
-    """Redact the free-text fields of an intent contract (AER §5(3)). Every
-    element of the untyped ``constraints``/``facts_provided``/``success_criteria``
-    arrays becomes the fixed string ``[REDACTED]`` (feedback #14)."""
-    c = dict(contract)
-    c["objective"] = REDACTED_VALUE
-    if c.get("jurisdiction"):
-        c["jurisdiction"] = REDACTED_VALUE
-    if c.get("role"):
-        c["role"] = REDACTED_VALUE
-    if c.get("revision_policy"):
-        c["revision_policy"] = REDACTED_VALUE
-    if c.get("constraints"):
-        c["constraints"] = [REDACTED_VALUE for _ in c["constraints"]]
-    if c.get("facts_provided"):
-        c["facts_provided"] = [REDACTED_VALUE for _ in c["facts_provided"]]
-    if c.get("success_criteria"):
-        c["success_criteria"] = [REDACTED_VALUE for _ in c["success_criteria"]]
-    return c
-
-
-def _redact_metadata(metadata: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
-    if not metadata:
-        return metadata
-    return {k: (REDACTED_VALUE if isinstance(v, str) else v) for k, v in metadata.items()}
-
-
-def _derive_redacted_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Re-chain redacted entries from sequence 0 (AER §5(2)). The per-entry agent
-    signature is dropped (a derived record is not agent-attributed); each derived
-    entry carries ``source_entry_hash`` = the original entry_hash (F3)."""
-    derived: list[dict[str, Any]] = []
-    prev = ""
-    for chained in entries:
-        redacted_entry = _redact_entry(chained["entry"])
-        wrapper = chained_entry(
-            chained["sequence"],
-            redacted_entry,
-            prev,
-            authorized_by=chained.get("authorized_by"),
-            source_entry_hash=chained["entry_hash"],
-        )
-        derived.append(wrapper)
-        prev = wrapper["entry_hash"]
-    return derived
-
 
 def _redact_session(session: dict[str, Any]) -> dict[str, Any]:
     s = dict(session)
@@ -142,6 +75,23 @@ def _seal(store: SessionStore, log: dict[str, Any]) -> dict[str, Any]:
         "public_key": key.public_b64,
         "signature": signature,
         "signed_at": now_rfc3339(),
+    }
+
+
+def _session_seal(store: SessionStore, session: dict[str, Any]) -> dict[str, Any]:
+    """gatehouse-native seal over the WHOLE session envelope (Opus V1/V2, Codex
+    #6). The reference §4.2 operator seal binds only {entry set + a few
+    scalars}, leaving intent_contract, human_authorizer, org_id, etc. unsigned —
+    so a standalone log could be re-scoped post-seal. This additional operator
+    signature covers ``sha256_jcs`` of the entire session, closing that gap for
+    gatehouse's produce+verify path. It is an EXTRA top-level field the
+    reference verifier ignores, so byte-for-byte interop (C1) is preserved."""
+    key = store.operator_key()
+    return {
+        "public_key": key.public_b64,
+        "signature": key.sign_b64(jcs_bytes(session)),
+        "signed_at": now_rfc3339(),
+        "covers": "session",
     }
 
 
@@ -176,6 +126,7 @@ def _assemble_log(
     }
     if sign:
         log["org_signature"] = _seal(store, log)
+        log["session_seal"] = _session_seal(store, log["session"])
     return log
 
 
@@ -380,6 +331,8 @@ def _audit_log_file(log: dict[str, Any]) -> dict[str, Any]:
     }
     if log.get("org_signature") is not None:
         out["org_signature"] = log["org_signature"]
+    if log.get("session_seal") is not None:
+        out["session_seal"] = log["session_seal"]
     return out
 
 

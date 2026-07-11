@@ -42,7 +42,10 @@ def public_key_b64(public: Ed25519PublicKey) -> str:
 
 
 def load_public_key_b64(b64_pem: str) -> Ed25519PublicKey:
-    pem = base64.b64decode(b64_pem)
+    # validate=True: reject non-alphabet characters instead of silently
+    # stripping them (Codex QA #9 — "!!!" + valid base64 must not decode to the
+    # valid bytes).
+    pem = base64.b64decode(b64_pem, validate=True)
     key = serialization.load_pem_public_key(pem)
     if not isinstance(key, Ed25519PublicKey):
         raise ValueError("public key is not Ed25519")
@@ -59,10 +62,11 @@ def verify_signature(public: Ed25519PublicKey, signature_b64: str, message: byte
     non-verification, never a raised exception. A verifier that throws on a
     hostile signature is a denial-of-evidence (Opus review V5d)."""
     try:
-        public.verify(base64.b64decode(signature_b64), message)
+        public.verify(base64.b64decode(signature_b64, validate=True), message)
         return True
     except (InvalidSignature, ValueError, TypeError):
-        # ValueError covers binascii.Error (bad base64) and bad key/sig length.
+        # ValueError covers binascii.Error (bad base64, incl. junk-prefixed
+        # strings under validate=True — Codex #9) and bad key/sig length.
         return False
 
 

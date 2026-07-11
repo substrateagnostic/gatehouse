@@ -34,10 +34,22 @@ record; they never alter traffic. Blocking is per-constraint opt-in
 
 ```bash
 pip install -e .            # from this directory, Python 3.12
-gatehouse demo              # cold end-to-end proof: no keys, no network
-gatehouse serve             # run the proxy on :8787
 gatehouse produce <session> # emit the AER evidence packet (full + redacted)
 gatehouse verify <bundle>   # offline verification -> tri-state verdict
+```
+
+The **evidence and verification** core (`produce`, `verify`, `verify-pair`, and
+the whole `gatehouse.evidence`/`gatehouse.verify` API) installs and runs with no
+extra dependencies.
+
+The **check layer, proxy, and eval** additionally need the FCE runtime (package
+`fiduciary`), which is not on PyPI — install it editable from the sibling repo
+first:
+
+```bash
+pip install -e ../fiduciary-constraint-evaluation   # required for the below
+gatehouse demo              # end-to-end proof: no keys, no network
+gatehouse serve             # run the proxy on :8787
 gatehouse eval configs/fce-eval.fixtures.json   # FCE 33 scenarios, no keys
 ```
 

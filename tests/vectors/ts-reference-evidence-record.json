@@ -1,0 +1,86 @@
+{
+  "aer_version": "0.1",
+  "agent_identity": {
+    "agent_id": "v2-agent",
+    "agent_version": "2.0.0",
+    "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQTFkcWV1V3RMTnZNR3c4TXRaT25DTnhiNU9vbUxqK3F3M3F4Uk9VcDhTd1E9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+    "fingerprint": "sha256:373546b77ca3edf6ae0027d6f99e1a386e009cce83c24aba46d5687ccf41cad2",
+    "signature_scheme": "ed25519"
+  },
+  "human_authorizer": {
+    "session_authorizer": {
+      "identifier": "cco@v2-org",
+      "role": "CCO"
+    },
+    "operation_authorizations": [],
+    "approvals": []
+  },
+  "operations": [
+    {
+      "sequence": 0,
+      "timestamp": "2026-07-11T04:50:33.955Z",
+      "type": "tool_invocation",
+      "operation": "account_lookup",
+      "status": "ok",
+      "entry_hash": "b51322cba98759ae09e5f41746f86cabec93a2343c056d1dfeff796d6b7a26e4",
+      "agent_signature": {
+        "fingerprint": "sha256:373546b77ca3edf6ae0027d6f99e1a386e009cce83c24aba46d5687ccf41cad2",
+        "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQTFkcWV1V3RMTnZNR3c4TXRaT25DTnhiNU9vbUxqK3F3M3F4Uk9VcDhTd1E9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+        "signature": "HGlq3vDhJbVJBf+bvTt/rnv0gkt3h60TUspbuDFCnKKEgCa2P+W7mgdEUDQE4lhFRWtdkKpyCR/Isz6uljC7DA=="
+      }
+    }
+  ],
+  "data_accessed": {
+    "resources": [
+      {
+        "type": "database",
+        "identifier": "secret.table.42",
+        "operation": "read"
+      }
+    ],
+    "pii_references": []
+  },
+  "policy_context": {
+    "session_id": "05745972-0284-45b2-9324-beaf4553f40a",
+    "org_id": "v2-org",
+    "environment": "test",
+    "initiated_at": "2026-07-11T04:50:33.955Z",
+    "closed_at": "2026-07-11T04:50:33.955Z",
+    "compliance_contexts": [
+      "FINRA_4511"
+    ],
+    "policy_context": [],
+    "intent_contract": {
+      "objective": "demo investigation objective",
+      "jurisdiction": "Minnesota",
+      "constraints": [
+        "read only access"
+      ]
+    },
+    "contract_hash": "0a6c62bd64a74ac926e154c04c32a5cf7cedba0a2f5c4ef774ab3e3b304f6b1e",
+    "retention_days": 2555,
+    "integrity_attestation": {
+      "schema_version": 2,
+      "canonicalization": "jcs",
+      "chain_valid": true,
+      "chain_verified_count": 1,
+      "merkle_root": "ffef216cea6f7a58fa050dae573f41a63cfe7a2e9f863c05888b1a8bbdf25700",
+      "merkle_valid": true,
+      "org_signature": {
+        "public_key": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQWVjZXVKckZ2VXpUOXZBSW1HZWdQU0k4TW1TaHhqd2M2VzdZeDhXUTlpV2M9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+        "signature": "cL2VOyB6fiyL5YH/rXcNS0COlBcsBt92Wl8cEJI08IH+qspCPR49/nz0MwkWz7NaBkKKj4FKiIuPmB6OagRzBw==",
+        "signed_at": "2026-07-11T04:50:33.956Z",
+        "valid": true
+      },
+      "agent_signatures": {
+        "present": true,
+        "valid": true,
+        "verified_count": 1
+      },
+      "status": "authenticated",
+      "attribution": "operator",
+      "overall_valid": true,
+      "export_timestamp": "2026-07-11T04:50:36.950Z"
+    }
+  }
+}

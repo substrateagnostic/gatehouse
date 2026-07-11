@@ -104,8 +104,23 @@ def test_verify_pair_accepts_honest_pair(full_bundle: Path, redacted_bundle: Pat
 
 def test_contract_hash_lazy_edit_fails(full_bundle: Path) -> None:
     log = _log(full_bundle)
+    # Strip the gatehouse envelope seal to isolate the contract_hash guard (on a
+    # gatehouse log the session_seal would catch the edit first; this exercises
+    # the guard as it applies to a foreign/reference log that has no seal).
+    log.pop("session_seal", None)
     log["session"]["intent_contract"]["objective"] = "Do something entirely different"
     # attacker does NOT update contract_hash
+    report = verify_audit_log(log)
+    assert report.status == "failed"
+    assert "contract_hash" in report.failing_step
+
+
+def test_contract_hash_absence_fails(full_bundle: Path) -> None:
+    # Codex QA #7: deleting contract_hash while keeping intent_contract must fail,
+    # not downgrade to "no judgment".
+    log = _log(full_bundle)
+    log.pop("session_seal", None)
+    del log["session"]["contract_hash"]
     report = verify_audit_log(log)
     assert report.status == "failed"
     assert "contract_hash" in report.failing_step
@@ -153,16 +168,39 @@ def test_strip_signature_hard_fails_in_bundle(full_bundle: Path) -> None:
 
 # --- The documented spec gap (V1-sophisticated / V2) ----------------------
 
-def test_envelope_rewrite_is_a_documented_standalone_gap(full_bundle: Path) -> None:
-    """The operator seal does not cover the session envelope, so on the
-    STANDALONE log a determined tamperer who also refreshes contract_hash can
-    rewrite intent_contract/human_authorizer and still authenticate. This is
-    the headline AER-level finding (aer-feedback #17b) — asserted here so the
-    gap is tracked and its later closure is visible as a test change."""
+def test_envelope_rewrite_now_caught_by_session_seal(full_bundle: Path) -> None:
+    """The AER operator seal does not cover the session envelope, so on a
+    STANDALONE reference log a tamperer who also refreshes contract_hash could
+    rewrite intent_contract/human_authorizer and still authenticate (the headline
+    finding, aer-feedback #17b). gatehouse closes this with a native full-envelope
+    ``session_seal``: on a gatehouse log the rewrite is now CAUGHT."""
     log = _log(full_bundle)
     log["session"]["intent_contract"]["objective"] = "Do anything at all"
     log["session"]["contract_hash"] = sha256_jcs(log["session"]["intent_contract"])
-    assert verify_audit_log(log).status == "authenticated"  # documented gap
+    report = verify_audit_log(log)
+    assert report.status == "failed"
+    assert report.envelope_valid is False
+    assert "session_seal" in report.failing_step
+
+
+def test_authorizer_rewrite_now_caught_by_session_seal(full_bundle: Path) -> None:
+    log = _log(full_bundle)
+    log["session"]["human_authorizer"] = {"identifier": "nobody", "role": "intern"}
+    report = verify_audit_log(log)
+    assert report.status == "failed"
+    assert report.envelope_valid is False
+
+
+def test_envelope_rewrite_without_seal_is_the_documented_reference_gap(full_bundle: Path) -> None:
+    """With the gatehouse ``session_seal`` stripped (i.e. a bare reference-shaped
+    log), the standalone envelope-rewrite gap is still present — this is the
+    AER-spec-level finding that a foreign log without an envelope seal cannot
+    detect. Asserted so the residual scope of the gap stays visible."""
+    log = _log(full_bundle)
+    log.pop("session_seal", None)
+    log["session"]["intent_contract"]["objective"] = "Do anything at all"
+    log["session"]["contract_hash"] = sha256_jcs(log["session"]["intent_contract"])
+    assert verify_audit_log(log).status == "authenticated"  # documented residual gap
 
 
 def test_envelope_rewrite_is_caught_in_the_bundle_path(full_bundle: Path) -> None:
@@ -172,3 +210,182 @@ def test_envelope_rewrite_is_caught_in_the_bundle_path(full_bundle: Path) -> Non
         json.dumps(log, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     assert verify_bundle(full_bundle).status == "failed"
+
+
+# --- Codex QA fixes -------------------------------------------------------
+
+def _reseal_manifest(bundle: Path, store: SessionStore, key=None) -> None:
+    """Recompute files{} hashes and re-sign the manifest (optionally with a
+    different key) so file-hash and seal checks would otherwise pass."""
+    from gatehouse.canonical import jcs_bytes
+
+    key = key or store.operator_key()
+    manifest = json.loads((bundle / "hash_manifest.json").read_text(encoding="utf-8"))
+    for name in list(manifest["files"].keys()):
+        manifest["files"][name] = sha256_hex((bundle / name).read_bytes())
+    unsigned = {k: v for k, v in manifest.items() if k != "operator_signature"}
+    manifest["operator_signature"] = {
+        "public_key": key.public_b64,
+        "signature": key.sign_b64(jcs_bytes(unsigned)),
+        "signed_at": "2026-07-11T00:00:00.000Z",
+    }
+    (bundle / "hash_manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def test_manifest_seal_strip_fails(full_bundle: Path) -> None:
+    # Codex #1: edit a payload, refresh its file hash, then DELETE the seal.
+    log = _log(full_bundle)
+    log["session"]["org_id"] = "somewhere-else"
+    data = json.dumps(log, indent=2, ensure_ascii=False).encode("utf-8")
+    (full_bundle / "audit_log.json").write_bytes(data)
+    manifest = json.loads((full_bundle / "hash_manifest.json").read_text(encoding="utf-8"))
+    manifest["files"]["audit_log.json"] = sha256_hex(data)
+    manifest.pop("operator_signature", None)  # strip the seal
+    (full_bundle / "hash_manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    report = verify_bundle(full_bundle)
+    assert report.status == "failed"
+    assert "seal" in report.failing_step.lower()
+
+
+def test_manifest_seal_replaced_by_foreign_key_fails(full_bundle: Path, store: SessionStore) -> None:
+    # Codex #1: re-seal with a DIFFERENT operator key than the audit-log operator.
+    from gatehouse.keys import AgentKey
+
+    log = _log(full_bundle)
+    log["session"]["org_id"] = "somewhere-else"
+    (full_bundle / "audit_log.json").write_text(
+        json.dumps(log, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    _reseal_manifest(full_bundle, store, key=AgentKey.generate())
+    report = verify_bundle(full_bundle)
+    assert report.status == "failed"
+
+
+def test_bundle_projection_edit_fails(full_bundle: Path, store: SessionStore) -> None:
+    # Codex #2: edit a NON-served_model projection, refresh hash + reseal.
+    record_path = full_bundle / "evidence_record.json"
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    record["agent_identity"]["agent_id"] = "someone-else"
+    record_path.write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
+    _reseal_manifest(full_bundle, store)
+    report = verify_bundle(full_bundle)
+    assert report.status == "failed"
+    assert "projection" in report.failing_step
+
+
+def test_bundle_entries_ndjson_must_equal_log(full_bundle: Path, store: SessionStore) -> None:
+    # Codex #2: entries.ndjson diverging from the audit log fails.
+    entries = _read_ndjson_lines(full_bundle / "entries.ndjson")
+    entries[0]["entry"]["provider"] = "forged"
+    (full_bundle / "entries.ndjson").write_text(
+        "".join(json.dumps(e, separators=(",", ":"), ensure_ascii=False) + "\n" for e in entries),
+        encoding="utf-8",
+    )
+    _reseal_manifest(full_bundle, store)
+    report = verify_bundle(full_bundle)
+    assert report.status == "failed"
+
+
+def _read_ndjson_lines(path: Path) -> list:
+    return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+
+
+def test_verify_pair_rejects_substituted_content(
+    full_bundle: Path, redacted_bundle: Path, store: SessionStore
+) -> None:
+    # Codex #3: substitute arbitrary content into a derived entry, rechain, fix
+    # the manifest tips + reseal, keep source_entry_hash. Positional binding
+    # passes but the redaction-reconstruction check must reject it.
+    from gatehouse.chain import chained_entry
+
+    derived = _read_ndjson_lines(redacted_bundle / "entries.ndjson")
+    # rebuild derived[0] with forged content, rechaining downstream
+    prev = ""
+    forged = []
+    for i, d in enumerate(derived):
+        entry = dict(d["entry"])
+        if i == 0:
+            entry["provider"] = "forged-provider"  # not a [REDACTED] transform
+        w = chained_entry(i, entry, prev, source_entry_hash=d["source_entry_hash"])
+        forged.append(w)
+        prev = w["entry_hash"]
+    (redacted_bundle / "entries.ndjson").write_text(
+        "".join(json.dumps(e, separators=(",", ":"), ensure_ascii=False) + "\n" for e in forged),
+        encoding="utf-8",
+    )
+    manifest = json.loads((redacted_bundle / "hash_manifest.json").read_text(encoding="utf-8"))
+    manifest["derived_last_entry_hash"] = forged[-1]["entry_hash"]
+    (redacted_bundle / "hash_manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    _reseal_manifest(redacted_bundle, store)
+    report = verify_pair(redacted_bundle, full_bundle / "audit_log.json")
+    assert report.status == "failed"
+    assert "redaction" in report.failing_step or "prescribed" in report.failing_step
+
+
+def test_verify_pair_requires_authenticated_original(
+    full_bundle: Path, redacted_bundle: Path, tmp_path: Path
+) -> None:
+    # Codex #4: an unsigned (consistent_unattributed) original is not a sealed
+    # original and must be refused.
+    log = _log(full_bundle)
+    log.pop("org_signature", None)
+    log.pop("session_seal", None)
+    p = tmp_path / "unsigned_original.json"
+    p.write_text(json.dumps(log, indent=2, ensure_ascii=False), encoding="utf-8")
+    report = verify_pair(redacted_bundle, p)
+    assert report.status == "failed"
+    assert "authenticated" in report.failing_step or "sealed" in report.failing_step
+
+
+def test_empty_degenerate_log_does_not_authenticate() -> None:
+    # Codex #5: a signed but structurally empty log must not authenticate.
+    from gatehouse.store import SessionStore as _S
+    import tempfile
+    store = _S(Path(tempfile.mkdtemp()) / "var")
+    key = store.operator_key()
+    from gatehouse.verify import org_signature_block
+    from gatehouse.canonical import jcs_bytes
+
+    log = {"version": "2.0.0", "schema_version": 2, "session": {}, "entries": [], "merkle_root": ""}
+    log["org_signature"] = {
+        "public_key": key.public_b64,
+        "signature": key.sign_b64(jcs_bytes(org_signature_block(log))),
+        "signed_at": "2026-07-11T00:00:00.000Z",
+    }
+    report = verify_audit_log(log)
+    assert report.status == "failed"
+    assert "session" in report.failing_step
+
+
+def test_manifest_path_traversal_rejected(full_bundle: Path, store: SessionStore) -> None:
+    # Codex #8: a manifest file name escaping the bundle dir must be rejected,
+    # not read off disk.
+    manifest = json.loads((full_bundle / "hash_manifest.json").read_text(encoding="utf-8"))
+    manifest["files"]["../../etc/passwd"] = "00" * 32
+    (full_bundle / "hash_manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    report = verify_bundle(full_bundle)
+    assert report.status == "failed"
+    assert "unsafe" in report.failing_step
+
+
+def test_bundle_verifier_is_total_on_bad_input(tmp_path: Path) -> None:
+    # Codex #8: verify_bundle / verify_pair never raise.
+    assert verify_bundle(tmp_path / "does-not-exist").status == "failed"
+    from gatehouse.verify import verify_pair as _vp
+    assert _vp(tmp_path / "nope", tmp_path / "nope.json").status == "failed"
+
+
+def test_invalid_base64_signature_is_not_accepted(full_bundle: Path) -> None:
+    # Codex #9: junk-prefixed base64 must not decode to the valid bytes.
+    log = _log(full_bundle)
+    sig = log["org_signature"]["signature"]
+    log["org_signature"]["signature"] = "!!!" + sig
+    assert verify_audit_log(log).status == "failed"

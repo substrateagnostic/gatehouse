@@ -1,15 +1,14 @@
-﻿GATEHOUSE demo cold run + TS reference verifier conformance — 2026-07-11 (overnight run)
-Command 1: gatehouse demo   (no keys, no network; stub upstream reroutes fable->sonnet)
-Result: session opened; proxied call disposition=flag (request text mentioned 'privileged');
-dual bundles produced; gatehouse verify: AUTHENTICATED, served_model mismatch surfaced at seq 0;
-pair binding ok.
+﻿GATEHOUSE demo + TS reference conformance — 2026-07-11 (after comprehensive verifier hardening)
+Includes the gatehouse-native session_seal (Opus V1/V2, Codex #6): an EXTRA top-level
+field the TS reference verifier ignores, so byte-for-byte interop is preserved.
 
-Command 2: node packages/cli/dist/index.js verify <demo>/bundle-full/audit_log.json
-Result: AUTHENTICATED — all verifications passed. EXIT 0   (C1)
+gatehouse demo -> exit 0 (session opened; shadow disposition; dual bundles; verify AUTHENTICATED;
+served_model reroute fable->sonnet surfaced; pair binding ok).
 
-Command 3: node packages/cli/dist/index.js verify-pair <demo>/bundle-redacted <demo>/bundle-full/audit_log.json
-Result: faithful derivation; every derived entry binds; nothing dropped or reordered. EXIT 0   (C2)
+node packages/cli/dist/index.js verify <demo>/bundle-full/audit_log.json
+  -> AUTHENTICATED — all verifications passed. EXIT 0   (C1, with session_seal present)
 
-The bundle contains served_model on model_call entries — the TS reference verifier
-round-trips it (JSON.parse, JCS recomputation) and still authenticates: the extension
-is interop-safe as recorded in docs/aer-feedback.md item 12.
+node packages/cli/dist/index.js verify-pair <demo>/bundle-redacted <demo>/bundle-full/audit_log.json
+  -> faithful derivation. EXIT 0   (C2)
+
+108 pytest tests pass. Opus + Codex GPT-5.6-Sol findings fixed (docs/redteam/2026-07-11-fixes-applied.md).

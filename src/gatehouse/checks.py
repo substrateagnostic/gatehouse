@@ -28,14 +28,23 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from fiduciary.cohomology.constraints import (
-    ConstraintPolarity,
-    ConstraintSet,
-    ConstraintType,
-    NormalizedConstraint,
-)
-from fiduciary.cohomology.enclave import EnclaveResolution, check_in_enclave
-from fiduciary.models import Severity as FceSeverity
+try:
+    from fiduciary.cohomology.constraints import (
+        ConstraintPolarity,
+        ConstraintSet,
+        ConstraintType,
+        NormalizedConstraint,
+    )
+    from fiduciary.cohomology.enclave import EnclaveResolution, check_in_enclave
+    from fiduciary.models import Severity as FceSeverity
+except ModuleNotFoundError as exc:  # pragma: no cover - environment guard
+    raise ModuleNotFoundError(
+        "gatehouse's check layer requires the FCE runtime (package 'fiduciary'), "
+        "which is not published to PyPI. Install it editable from the sibling "
+        "repo before using `gatehouse serve`/`demo`/`eval` or the proxy:\n"
+        "    pip install -e ../fiduciary-constraint-evaluation\n"
+        "The evidence/verify/produce paths do not need it (see README)."
+    ) from exc
 
 from .models import EnforcementType, GateConstraint
 

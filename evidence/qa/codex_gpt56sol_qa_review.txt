@@ -5226,3 +5226,416 @@ with patch.object(v,'_read_json',side_effect=[{'files':[1]},audit]):
  succeeded in 782ms:
 AttributeError 'list' object has no attribute 'items'
 
+exec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-FileHash 
+src/gatehouse/verify.py,src/gatehouse/chain.py,src/gatehouse/keys.py -Algorithm SHA256 | Select-Object Path,Hash' in 
+C:\Users\agall\projects\GATEHOUSE
+ succeeded in 802ms:
+
+Path                                                      Hash                                                         
+----                                                      ----                                                         
+C:\Users\agall\projects\GATEHOUSE\src\gatehouse\verify.py B5C728673C6F21DE7A24D2721B278A53A52878FE19D4B790198DEC2DFE...
+C:\Users\agall\projects\GATEHOUSE\src\gatehouse\chain.py  66E56E8F2B0D9A0E01E0380F75188A8B76106A928934AF510447D31513...
+C:\Users\agall\projects\GATEHOUSE\src\gatehouse\keys.py   0F62BDEAC7DD990CAE8F17EE1E7C156F6029E5E592A589ABF8A92CA0C9...
+
+
+
+codex
+The audit-log entry point is now total for ordinary Python/JSON inputs: its new outer guard converts type/canonicalization/Merkle 
+failures into a failed report. The remaining unhandled exceptions are confined to `verify_bundle` and `verify_pair`. The main 
+correctness failures are not crashes, though—they are successful verdicts for altered bundle projections and non-faithful 
+“redactions.”
+Targeted in-memory and mocked-path reproductions confirmed the successful-verification gaps, path-verifier exceptions, signature 
+parsing behavior, and standalone/bundle disagreement. Preparing the ranked report against the refreshed files.
+  ✓ Inspect verifier entry points and repository guidance
+  ✓ Trace primitives, record production, and interoperability specification
+  ✓ Audit existing tests and tamper QA coverage
+  ✓ Reproduce edge cases and rank findings across all four QA dimensions
+exec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Item 
+src/gatehouse/verify.py,src/gatehouse/chain.py,src/gatehouse/keys.py | Select-Object FullName,LastWriteTimeUtc,Length' in 
+C:\Users\agall\projects\GATEHOUSE
+ succeeded in 520ms:
+
+FullName                                                  LastWriteTimeUtc     Length
+--------                                                  ----------------     ------
+C:\Users\agall\projects\GATEHOUSE\src\gatehouse\verify.py 7/11/2026 6:21:01 AM  27023
+C:\Users\agall\projects\GATEHOUSE\src\gatehouse\chain.py  7/11/2026 6:17:36 AM   3095
+C:\Users\agall\projects\GATEHOUSE\src\gatehouse\keys.py   7/11/2026 6:15:47 AM   3651
+
+
+
+codex
+## Ranked observations
+
+1. **High — An attacker can alter bundle payloads and retain `authenticated` status by removing or replacing the manifest seal.**
+
+   - **Location:** [verify.py:523](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:523), 
+[verify.py:524](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:524)
+   - **Scenario:** In a valid full bundle, change `evidence_record.json`, update its `files{}` hash, then delete 
+`hash_manifest.json.operator_signature`. I reproduced this after changing `agent_identity.agent_id` and 
+`integrity_attestation.overall_valid`; `verify_bundle` returned `authenticated`.
+   - **Expected:** A gatehouse bundle originally sealed by an operator should fail if its binding seal is missing or signed by an 
+unrelated replacement key.
+   - **Actual:** `seal is None` is accepted. Even a valid replacement seal is not compared with `audit_log.org_signature.public_key`.
+   - **Minimal fix:** For gatehouse bundles, require `_verify_manifest_seal(manifest) is True`. For operational bundles, also require 
+the manifest public key to equal the audit-log operator public key. In `verify_pair`, bind the redacted manifest key to the 
+authenticated original’s operator key. Treat a present but empty/wrong-type signature block as invalid, not absent.
+
+2. **High — Bundle verification does not recompute the evidence record or establish that `entries.ndjson` is the verified audit log.**
+
+   - **Location:** [verify.py:544](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:544), 
+[verify.py:551](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:551), projections produced at 
+[evidence.py:325](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:325)
+   - **Scenario:** Change any non-`served_model` projection, such as `agent_identity`, `human_authorizer`, `data_accessed`, 
+`policy_context`, or the stored `integrity_attestation`; update the manifest hash and seal as above. Verification still 
+authenticates. More seriously, change `served_model` in both `evidence_record.json` and `entries.ndjson`; the dedicated comparison 
+agrees, although neither copy agrees with `audit_log.json`.
+   - **Expected:** “End-to-end” verification should establish that all three representations describe the same verified records and 
+that stored attestation judgments equal a fresh verification.
+   - **Actual:** Only `operations[].served_model` is compared, and it is compared against unverified NDJSON rather than 
+`audit_log.entries`. The stored attestation is never compared with `base`.
+   - **Minimal fix:** Require parsed `entries.ndjson == audit_log["entries"]`, then recompute and compare all deterministic evidence 
+projections. Recompute the attestation fields from `base`, excluding only explicitly informational timestamps.
+
+3. **High — `verify_pair` proves hash binding, but not that the derived payload is the prescribed redaction.**
+
+   - **Location:** [verify.py:631](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:631), 
+[verify.py:641](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:641); expected transformations are in 
+[evidence.py:51](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:51)
+   - **Scenario:** Change a normally preserved derived field, e.g. `derived[0]["entry"]["provider"] = "forged-provider"`, recompute 
+the derived chain, and update `manifest.derived_last_entry_hash`. Keep every `source_entry_hash` unchanged. I reproduced 
+`consistent_unattributed`.
+   - **Expected:** Fail because changing `provider` is not allowed by `aer-0.1-basic`.
+   - **Actual:** The pair verifier checks only positional source hashes, derived chain validity, counts, and tips. Arbitrary 
+replacement content and changed `authorized_by` values pass after rechaining.
+   - **Minimal fix:** For every source entry, independently construct the expected redacted entry and require exact equality with the 
+derived `entry`; require `authorized_by` equality, the correct `source_entry_hash`, and absence of agent signatures. Move the 
+redaction transformation into a shared module to avoid a circular import.
+
+4. **High — `verify_pair` recomputes the original, but still accepts an unsigned source and does not verify the redacted bundle 
+seal/files/Merkle root.**
+
+   - **Location:** [verify.py:580](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:580), 
+[verify.py:585](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:585), 
+[verify.py:663](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:663), 
+[verify.py:670](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:670)
+   - **Scenario:** Remove `org_signature` from an otherwise valid original. `verify_audit_log` returns `consistent_unattributed`, and 
+I reproduced `verify_pair` still returning success. Separately, `verify_pair` never examines the manifest signature or `files{}`, and 
+reports `merkle_valid=True` without reading a derived Merkle root.
+   - **Expected:** Its documented “sealed original” requirement should require `authenticated`; missing/tampered redacted bundle 
+files or seal should fail.
+   - **Actual:** It rejects only `original_report.status == "failed"`. Thus it does independently recompute the original’s hashes—it 
+no longer trusts stored hashes blindly—but it does not establish operator trustworthiness.
+   - **Minimal fix:** Require `original_report.status == "authenticated"`, require a valid manifest seal bound to that operator, 
+verify every manifest file, cross-check the derived audit log against NDJSON, and propagate the actually recomputed Merkle judgment 
+rather than assigning `True`.
+
+5. **High — Structurally invalid or radically incomplete logs can be reported as authenticated.**
+
+   - **Location:** signature members are omitted at [verify.py:90](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:90); 
+`_core` starts cryptographic verification without schema validation at 
+[verify.py:213](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:213)
+   - **Scenario:** Sign:
+     ```python
+     {
+         "version": "2.0.0",
+         "schema_version": 2,
+         "session": {},
+         "entries": [],
+         "merkle_root": ""
+     }
+     ```
+     using `org_signature_block`. I reproduced `authenticated`, despite the missing required session identity, organization, 
+environment, initiator, timestamps, retention, and contract fields.
+   - **Expected:** A malformed AER document should return `failed`, even if somebody signs the reduced block.
+   - **Actual:** No AuditLog, SessionEnvelope, ChainedEntry, or typed-entry schema validation occurs. Python equality also lets 
+`sequence: 0.0` verify as sequence `0`.
+   - **Minimal fix:** Add an explicit validation step before `_core`: exact top-level types and required keys, required 
+SessionEnvelope fields, dense integer sequences excluding booleans/floats, 64-character lowercase hash formats, and typed-entry 
+required fields.
+
+6. **Medium — Most session semantics are outside both the hash chain and operator signature.**
+
+   - **Location:** [verify.py:80](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:80), 
+[chain.py:17](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/chain.py:17)
+   - **Scenario:** Starting with a valid full audit log, I independently changed `version`, `session.org_id`, `agent_id`, 
+`environment`, `initiated_at`, `metadata`, and removed `agent_public_key`. Each still returned `authenticated` with a valid operator 
+signature.
+   - **Expected:** A reader will reasonably understand an authenticated evidence session to authenticate these identity and policy 
+attributes.
+   - **Actual:** The operator authenticates only the narrow integrity block described below.
+   - **Minimal fix:** Add a signed `session_hash = sha256_jcs(session)` or an equivalent second seal in a versioned construction. For 
+bundles, a required, same-operator manifest seal over `audit_log.json` can compensate, but it does not fix standalone logs.
+
+7. **Medium — A required `contract_hash` can be absent, and coordinated contract/hash rewrites remain authenticated.**
+
+   - **Location:** [verify.py:201](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:201), 
+[verify.py:208](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:208), 
+[verify.py:269](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:269)
+   - **Scenario:** Delete `session.contract_hash` while retaining a nonempty `intent_contract`. The result is 
+`contract_hash_valid=None`, so the sealed log remains `authenticated`. Changing both the contract and its hash also remains 
+authenticated because neither value is operator-signed.
+   - **Expected:** A present contract without its §3.5-required hash should fail; a post-seal coordinated rewrite should be 
+detectable.
+   - **Actual:** Missing and empty values are treated as “no judgment,” and only an explicit mismatch is enforced.
+   - **Minimal fix:** Return `False` when `intent_contract is not None` and `contract_hash` is absent or malformed; use `is None`, 
+not truthiness. Protect the hash via the session digest/operator seal described above.
+
+8. **Medium — `verify_bundle` and `verify_pair` are not total over malformed inputs.**
+
+   - **Locations and reproduced exceptions:**
+
+     | Input | Location | Actual exception |
+     |---|---|---|
+     | `verify_bundle(None)` | [verify.py:478](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:478) | `TypeError` |
+     | Manifest `"files": [1]` | [verify.py:515](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:515) | `AttributeError: 
+list has no attribute items` |
+     | Manifest file name `"."` | [verify.py:519](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:519) | 
+`IsADirectoryError` |
+     | Valid manifest public key but missing `"signature"` | 
+[verify.py:433](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:433) | `KeyError` |
+     | `evidence_record.json` containing `[]` | [verify.py:458](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:458) | 
+`AttributeError` |
+     | Scalar NDJSON entries | [verify.py:460](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:460), 
+[verify.py:633](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:633) | `AttributeError` |
+     | `verify_pair(None, path)` | [verify.py:564](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:564) | `TypeError` |
+
+   - **Expected:** A named `failed` report for each.
+   - **Minimal fix:** Give both public path APIs an outer totality boundary like `verify_audit_log`, then add local type guards so 
+errors remain specific. Validate manifest names as simple relative filenames contained beneath `bundle_dir`; currently `../...` and 
+absolute names can make verification read outside the bundle.
+   - **Clean result:** `verify_audit_log` is total in the current version, and missing primary files plus malformed JSON/UTF-8 are 
+already converted into structured failures.
+
+9. **Low — Invalid base64 can be silently accepted.**
+
+   - **Location:** [keys.py:44](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:44), 
+[keys.py:62](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:62)
+   - **Scenario:** Prefix a valid public key or signature with `"!!!"`. I reproduced both decoding to the original bytes, and the 
+signature still verified.
+   - **Expected:** A non-base64 string should be a non-verification.
+   - **Actual:** `base64.b64decode` defaults to permissive mode and ignores nonalphabet characters.
+   - **Minimal fix:** Use `base64.b64decode(value, validate=True)` in both functions.
+
+10. **Low — Standalone and bundle verdict/report semantics disagree for stripped signatures.**
+
+   - **Location:** [verify.py:66](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:66), 
+[verify.py:536](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:536), 
+[verify.py:436](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:436)
+   - **Scenario:** Remove one agent signature from a sealed log. Standalone verification returns `authenticated` with 
+`fully_attributed=False`; bundle verification hard-fails the same audit log.
+   - **Expected:** Functions advertised as verifying the same log should either share a policy or expose the stricter bundle policy 
+explicitly.
+   - **Actual:** The disagreement is intentional but externally significant. Additionally, `_fail` does not copy `fully_attributed`, 
+so bundle failures lose a valid base judgment and report `None`.
+   - **Minimal fix:** Either make full attribution a shared `_core` policy or expose a named strict-mode parameter. Copy 
+`fully_attributed=base.fully_attributed` in `_fail`.
+
+## Exact coverage map
+
+The hash chain covers:
+
+- `entries[i].sequence`
+- the complete nested `entries[i].entry`
+- `entries[i].previous_hash`
+- non-null `entries[i].authorized_by`
+- `entry_hash` indirectly, by recomputation
+
+It does **not** cover `source_entry_hash`, `agent_signature`, arbitrary additional wrapper fields, or the distinction between absent 
+and explicitly null `authorized_by`.
+
+The operator signature covers:
+
+- `session.session_id`
+- `merkle_root`
+- recomputed `len(entries)`
+- `session.closed_at`
+- `schema_version`
+- `session.agent_fingerprint`
+- constant `"RFC8785"`
+
+Consequently, top-level `version`, extra top-level fields, `org_signature.signed_at`, `source_entry_hash`, and wrapper extras are not 
+operator-signed. Entries are indirectly protected through the recomputed chain, Merkle root, and signed root.
+
+At session level, these are **not** operator-signed or chain-covered:
+
+- `org_id`
+- `agent_id`, `agent_version`, `agent_public_key`, `signature_scheme`
+- `environment`
+- `initiated_by`, `initiated_at`
+- `compliance_contexts`, `policy_context`
+- `human_authorizer`
+- `intent_contract`, `contract_hash`
+- `retention_days`
+- `metadata`
+
+`agent_public_key` is only checked operationally against signatures when it is present; deleting it does not invalidate an otherwise 
+valid log.
+
+For `evidence_record.json`, none of its six top-level projections is hash-chain-covered. Exact bytes are conditionally protected by 
+`manifest.files{}` and the manifest signature, but the current verifier does not require or identity-bind that signature. Only 
+`operations[].served_model` receives an independent projection comparison, and currently that comparison uses unverified NDJSON.
+
+## Clean findings
+
+- Chain hashes, Merkle roots, operator signatures, agent fingerprints/keys, and present agent signatures are genuinely recomputed.
+- Standalone and bundle audit-log cryptography share the same `_core`; bundle verification does not omit an audit-log cryptographic 
+step.
+- Freshly produced attestations use a real `_core` pass. The gap is that stored attestations are not checked again during bundle 
+verification.
+- Nonhex entry hashes and canonicalization failures now produce failed audit-log reports rather than escaping as exceptions.
+
+This report is based on the refreshed on-disk files after the verifier changed during the review; no files were modified by me.
+tokens used
+116,291
+## Ranked observations
+
+1. **High — An attacker can alter bundle payloads and retain `authenticated` status by removing or replacing the manifest seal.**
+
+   - **Location:** [verify.py:523](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:523), [verify.py:524](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:524)
+   - **Scenario:** In a valid full bundle, change `evidence_record.json`, update its `files{}` hash, then delete `hash_manifest.json.operator_signature`. I reproduced this after changing `agent_identity.agent_id` and `integrity_attestation.overall_valid`; `verify_bundle` returned `authenticated`.
+   - **Expected:** A gatehouse bundle originally sealed by an operator should fail if its binding seal is missing or signed by an unrelated replacement key.
+   - **Actual:** `seal is None` is accepted. Even a valid replacement seal is not compared with `audit_log.org_signature.public_key`.
+   - **Minimal fix:** For gatehouse bundles, require `_verify_manifest_seal(manifest) is True`. For operational bundles, also require the manifest public key to equal the audit-log operator public key. In `verify_pair`, bind the redacted manifest key to the authenticated original’s operator key. Treat a present but empty/wrong-type signature block as invalid, not absent.
+
+2. **High — Bundle verification does not recompute the evidence record or establish that `entries.ndjson` is the verified audit log.**
+
+   - **Location:** [verify.py:544](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:544), [verify.py:551](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:551), projections produced at [evidence.py:325](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:325)
+   - **Scenario:** Change any non-`served_model` projection, such as `agent_identity`, `human_authorizer`, `data_accessed`, `policy_context`, or the stored `integrity_attestation`; update the manifest hash and seal as above. Verification still authenticates. More seriously, change `served_model` in both `evidence_record.json` and `entries.ndjson`; the dedicated comparison agrees, although neither copy agrees with `audit_log.json`.
+   - **Expected:** “End-to-end” verification should establish that all three representations describe the same verified records and that stored attestation judgments equal a fresh verification.
+   - **Actual:** Only `operations[].served_model` is compared, and it is compared against unverified NDJSON rather than `audit_log.entries`. The stored attestation is never compared with `base`.
+   - **Minimal fix:** Require parsed `entries.ndjson == audit_log["entries"]`, then recompute and compare all deterministic evidence projections. Recompute the attestation fields from `base`, excluding only explicitly informational timestamps.
+
+3. **High — `verify_pair` proves hash binding, but not that the derived payload is the prescribed redaction.**
+
+   - **Location:** [verify.py:631](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:631), [verify.py:641](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:641); expected transformations are in [evidence.py:51](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/evidence.py:51)
+   - **Scenario:** Change a normally preserved derived field, e.g. `derived[0]["entry"]["provider"] = "forged-provider"`, recompute the derived chain, and update `manifest.derived_last_entry_hash`. Keep every `source_entry_hash` unchanged. I reproduced `consistent_unattributed`.
+   - **Expected:** Fail because changing `provider` is not allowed by `aer-0.1-basic`.
+   - **Actual:** The pair verifier checks only positional source hashes, derived chain validity, counts, and tips. Arbitrary replacement content and changed `authorized_by` values pass after rechaining.
+   - **Minimal fix:** For every source entry, independently construct the expected redacted entry and require exact equality with the derived `entry`; require `authorized_by` equality, the correct `source_entry_hash`, and absence of agent signatures. Move the redaction transformation into a shared module to avoid a circular import.
+
+4. **High — `verify_pair` recomputes the original, but still accepts an unsigned source and does not verify the redacted bundle seal/files/Merkle root.**
+
+   - **Location:** [verify.py:580](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:580), [verify.py:585](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:585), [verify.py:663](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:663), [verify.py:670](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:670)
+   - **Scenario:** Remove `org_signature` from an otherwise valid original. `verify_audit_log` returns `consistent_unattributed`, and I reproduced `verify_pair` still returning success. Separately, `verify_pair` never examines the manifest signature or `files{}`, and reports `merkle_valid=True` without reading a derived Merkle root.
+   - **Expected:** Its documented “sealed original” requirement should require `authenticated`; missing/tampered redacted bundle files or seal should fail.
+   - **Actual:** It rejects only `original_report.status == "failed"`. Thus it does independently recompute the original’s hashes—it no longer trusts stored hashes blindly—but it does not establish operator trustworthiness.
+   - **Minimal fix:** Require `original_report.status == "authenticated"`, require a valid manifest seal bound to that operator, verify every manifest file, cross-check the derived audit log against NDJSON, and propagate the actually recomputed Merkle judgment rather than assigning `True`.
+
+5. **High — Structurally invalid or radically incomplete logs can be reported as authenticated.**
+
+   - **Location:** signature members are omitted at [verify.py:90](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:90); `_core` starts cryptographic verification without schema validation at [verify.py:213](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:213)
+   - **Scenario:** Sign:
+     ```python
+     {
+         "version": "2.0.0",
+         "schema_version": 2,
+         "session": {},
+         "entries": [],
+         "merkle_root": ""
+     }
+     ```
+     using `org_signature_block`. I reproduced `authenticated`, despite the missing required session identity, organization, environment, initiator, timestamps, retention, and contract fields.
+   - **Expected:** A malformed AER document should return `failed`, even if somebody signs the reduced block.
+   - **Actual:** No AuditLog, SessionEnvelope, ChainedEntry, or typed-entry schema validation occurs. Python equality also lets `sequence: 0.0` verify as sequence `0`.
+   - **Minimal fix:** Add an explicit validation step before `_core`: exact top-level types and required keys, required SessionEnvelope fields, dense integer sequences excluding booleans/floats, 64-character lowercase hash formats, and typed-entry required fields.
+
+6. **Medium — Most session semantics are outside both the hash chain and operator signature.**
+
+   - **Location:** [verify.py:80](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:80), [chain.py:17](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/chain.py:17)
+   - **Scenario:** Starting with a valid full audit log, I independently changed `version`, `session.org_id`, `agent_id`, `environment`, `initiated_at`, `metadata`, and removed `agent_public_key`. Each still returned `authenticated` with a valid operator signature.
+   - **Expected:** A reader will reasonably understand an authenticated evidence session to authenticate these identity and policy attributes.
+   - **Actual:** The operator authenticates only the narrow integrity block described below.
+   - **Minimal fix:** Add a signed `session_hash = sha256_jcs(session)` or an equivalent second seal in a versioned construction. For bundles, a required, same-operator manifest seal over `audit_log.json` can compensate, but it does not fix standalone logs.
+
+7. **Medium — A required `contract_hash` can be absent, and coordinated contract/hash rewrites remain authenticated.**
+
+   - **Location:** [verify.py:201](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:201), [verify.py:208](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:208), [verify.py:269](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:269)
+   - **Scenario:** Delete `session.contract_hash` while retaining a nonempty `intent_contract`. The result is `contract_hash_valid=None`, so the sealed log remains `authenticated`. Changing both the contract and its hash also remains authenticated because neither value is operator-signed.
+   - **Expected:** A present contract without its §3.5-required hash should fail; a post-seal coordinated rewrite should be detectable.
+   - **Actual:** Missing and empty values are treated as “no judgment,” and only an explicit mismatch is enforced.
+   - **Minimal fix:** Return `False` when `intent_contract is not None` and `contract_hash` is absent or malformed; use `is None`, not truthiness. Protect the hash via the session digest/operator seal described above.
+
+8. **Medium — `verify_bundle` and `verify_pair` are not total over malformed inputs.**
+
+   - **Locations and reproduced exceptions:**
+
+     | Input | Location | Actual exception |
+     |---|---|---|
+     | `verify_bundle(None)` | [verify.py:478](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:478) | `TypeError` |
+     | Manifest `"files": [1]` | [verify.py:515](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:515) | `AttributeError: list has no attribute items` |
+     | Manifest file name `"."` | [verify.py:519](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:519) | `IsADirectoryError` |
+     | Valid manifest public key but missing `"signature"` | [verify.py:433](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:433) | `KeyError` |
+     | `evidence_record.json` containing `[]` | [verify.py:458](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:458) | `AttributeError` |
+     | Scalar NDJSON entries | [verify.py:460](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:460), [verify.py:633](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:633) | `AttributeError` |
+     | `verify_pair(None, path)` | [verify.py:564](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:564) | `TypeError` |
+
+   - **Expected:** A named `failed` report for each.
+   - **Minimal fix:** Give both public path APIs an outer totality boundary like `verify_audit_log`, then add local type guards so errors remain specific. Validate manifest names as simple relative filenames contained beneath `bundle_dir`; currently `../...` and absolute names can make verification read outside the bundle.
+   - **Clean result:** `verify_audit_log` is total in the current version, and missing primary files plus malformed JSON/UTF-8 are already converted into structured failures.
+
+9. **Low — Invalid base64 can be silently accepted.**
+
+   - **Location:** [keys.py:44](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:44), [keys.py:62](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/keys.py:62)
+   - **Scenario:** Prefix a valid public key or signature with `"!!!"`. I reproduced both decoding to the original bytes, and the signature still verified.
+   - **Expected:** A non-base64 string should be a non-verification.
+   - **Actual:** `base64.b64decode` defaults to permissive mode and ignores nonalphabet characters.
+   - **Minimal fix:** Use `base64.b64decode(value, validate=True)` in both functions.
+
+10. **Low — Standalone and bundle verdict/report semantics disagree for stripped signatures.**
+
+   - **Location:** [verify.py:66](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:66), [verify.py:536](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:536), [verify.py:436](/C:/Users/agall/projects/GATEHOUSE/src/gatehouse/verify.py:436)
+   - **Scenario:** Remove one agent signature from a sealed log. Standalone verification returns `authenticated` with `fully_attributed=False`; bundle verification hard-fails the same audit log.
+   - **Expected:** Functions advertised as verifying the same log should either share a policy or expose the stricter bundle policy explicitly.
+   - **Actual:** The disagreement is intentional but externally significant. Additionally, `_fail` does not copy `fully_attributed`, so bundle failures lose a valid base judgment and report `None`.
+   - **Minimal fix:** Either make full attribution a shared `_core` policy or expose a named strict-mode parameter. Copy `fully_attributed=base.fully_attributed` in `_fail`.
+
+## Exact coverage map
+
+The hash chain covers:
+
+- `entries[i].sequence`
+- the complete nested `entries[i].entry`
+- `entries[i].previous_hash`
+- non-null `entries[i].authorized_by`
+- `entry_hash` indirectly, by recomputation
+
+It does **not** cover `source_entry_hash`, `agent_signature`, arbitrary additional wrapper fields, or the distinction between absent and explicitly null `authorized_by`.
+
+The operator signature covers:
+
+- `session.session_id`
+- `merkle_root`
+- recomputed `len(entries)`
+- `session.closed_at`
+- `schema_version`
+- `session.agent_fingerprint`
+- constant `"RFC8785"`
+
+Consequently, top-level `version`, extra top-level fields, `org_signature.signed_at`, `source_entry_hash`, and wrapper extras are not operator-signed. Entries are indirectly protected through the recomputed chain, Merkle root, and signed root.
+
+At session level, these are **not** operator-signed or chain-covered:
+
+- `org_id`
+- `agent_id`, `agent_version`, `agent_public_key`, `signature_scheme`
+- `environment`
+- `initiated_by`, `initiated_at`
+- `compliance_contexts`, `policy_context`
+- `human_authorizer`
+- `intent_contract`, `contract_hash`
+- `retention_days`
+- `metadata`
+
+`agent_public_key` is only checked operationally against signatures when it is present; deleting it does not invalidate an otherwise valid log.
+
+For `evidence_record.json`, none of its six top-level projections is hash-chain-covered. Exact bytes are conditionally protected by `manifest.files{}` and the manifest signature, but the current verifier does not require or identity-bind that signature. Only `operations[].served_model` receives an independent projection comparison, and currently that comparison uses unverified NDJSON.
+
+## Clean findings
+
+- Chain hashes, Merkle roots, operator signatures, agent fingerprints/keys, and present agent signatures are genuinely recomputed.
+- Standalone and bundle audit-log cryptography share the same `_core`; bundle verification does not omit an audit-log cryptographic step.
+- Freshly produced attestations use a real `_core` pass. The gap is that stored attestations are not checked again during bundle verification.
+- Nonhex entry hashes and canonicalization failures now produce failed audit-log reports rather than escaping as exceptions.
+
+This report is based on the refreshed on-disk files after the verifier changed during the review; no files were modified by me.
