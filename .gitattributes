@@ -1,0 +1,11 @@
+# Normalize line endings to LF on commit — keeps receipts and diffs clean
+# across platforms (the QA receipts are tamper-evidence; they must render
+# identically in every browser and diff tool).
+* text=auto eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+# Vendored golden vectors and receipts are UTF-8; never touch their bytes.
+tests/vectors/** -text

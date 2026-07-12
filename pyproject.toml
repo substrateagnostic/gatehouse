@@ -7,7 +7,7 @@ name = "gatehouse"
 version = "0.1.0"
 description = "A fiduciary gate between an agent and a model API: declared scope in, constraint-checked traffic through, court-grade evidence out. Second implementation of AER v0.1."
 requires-python = ">=3.12"
-license = { text = "UNLICENSED" }  # publish/license is a human decision — see NEEDS_YOU.md
+license = { text = "Apache-2.0" }  # decided 2026-07-11 (Alex); patent grant matters for standards-adjacent code
 dependencies = [
     "cryptography>=49",
     "rfc8785>=0.1.4",

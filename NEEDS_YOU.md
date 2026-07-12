@@ -14,7 +14,7 @@ court-grade evidence out**, shadow-mode by default. It is the **second
 implementation of AER v0.1**, and its bundles verify AUTHENTICATED under the
 AgentLedger TypeScript reference verifier in both directions.
 
-- **116 tests pass.** One cold command proves the whole pipeline: `gatehouse demo`.
+- **118 tests pass.** One cold command proves the whole pipeline: `gatehouse demo`.
 - Two independent adversarial reviews (Opus 4.8 in-context + **Codex
   GPT-5.6-Sol xhigh**, which cleared the cyber classifier this time under QA
   framing) found issues across two rounds; all are fixed with regression tests,
@@ -166,26 +166,40 @@ ones worth your eye:
 
 ---
 
-## DECISIONS ONLY YOU CAN MAKE
+## DECISIONS — RESOLVED by Alex (2026-07-11 morning), executed
 
-1. **Name.** "gatehouse" is a placeholder I've been using. It reads well and
-   isn't taken in this constellation, but it's yours to keep or change.
-2. **License.** `pyproject.toml` says `UNLICENSED`. The lineage is CC BY 4.0
-   (AER spec) / the agentledger + FCE repos. Note **FCE itself has no license
-   yet** — gatehouse depends on it for the check layer, so gatehouse can't be
-   licensed more openly than FCE until FCE has a license. Pick both together.
-3. **Publish or hold.** Everything is local (`~/Projects/gatehouse`, git
-   history intact, nothing pushed). Holds cleanly. If you publish, the honest
-   framing is "v0.1, second AER implementation, reviewed" — the fixes-applied
-   ledger and the aer-feedback list are assets, not liabilities.
-4. **The AER-spec question (the real one).** Do you want AER **v0.2** to bind
-   the full session envelope into the operator seal — closing #17b universally
-   at the cost of a one-time byte-for-byte re-baseline of the reference — or do
-   you want the spec to state that the standalone seal covers *{entry set +
-   session scalars}* only and envelope integrity is a transport/storage
-   property? gatehouse already implements the additive `session_seal` as a
-   proof-of-concept for the first path. This is a spec-direction call, and
-   you're the editor.
+1. **Name → keep `gatehouse`.** "The building at the estate boundary where
+   entries are witnessed and recorded; on-thesis without a syllable of lore, and
+   it passed the classifier." No change needed; placeholder language removed.
+2. **License → Apache-2.0, gatehouse and FCE as a pair.** Done: `LICENSE`
+   (Apache-2.0) added to **both** repos, `pyproject.toml` license fields set,
+   FCE README updated. Rationale (Alex): the patent grant matters for
+   standards-adjacent code enterprises implement against, and **FCE having no
+   license was the actual P0** — it blocked everything downstream. AER spec
+   stays CC BY 4.0.
+3. **Publish → yes**, honest framing ("the fixes ledger and feedback list are
+   the credential, not the confession"), **with the AER issue opened first** so
+   the spec never silently diverges from its implementations. Status: see the
+   "Publish status" note below.
+4. **AER v0.2 → bind the envelope into the seal.** Alex's ruling: "A design that
+   cryptographically protects the ledger of what happened while leaving
+   unprotected the record of what was permitted is backwards for a fiduciary
+   instrument." Plan: version it — v0.1 records verify under v0.1 rules;
+   envelope-seal becomes a MUST at v0.2; gatehouse's `session_seal` is the
+   migration proof-of-concept. Re-baseline now, with two implementations in hand
+   and zero external adopters — "it will never be cheaper." The gap is stated
+   publicly as an AER issue before anything publishes.
+
+## Publish status (this session)
+
+- AER v0.2 gap issue on `agent-evidence-record`: **opened →**
+  https://github.com/substrateagnostic/agent-evidence-record/issues/6 (the gap
+  is public before anything published, per your instruction).
+- gatehouse published to **https://github.com/substrateagnostic/gatehouse**
+  (Apache-2.0), after the issue above.
+- FCE Apache-2.0 license committed and pushed to
+  `substrateagnostic/fiduciary-constraint-evaluation` (the P0 that unblocked
+  gatehouse's license coherence).
 
 Nothing else is blocked. The thread held. над. нашу.
 

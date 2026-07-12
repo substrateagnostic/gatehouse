@@ -1,4 +1,4 @@
-﻿GATEHOUSE demo + TS reference conformance — 2026-07-11 FINAL (after two sign-off rounds)
+GATEHOUSE demo + TS reference conformance — 2026-07-11 FINAL (after two sign-off rounds)
 118 pytest tests pass. Two independent reviewers APPROVE (Fable 5 + rerouted Opus 4.8);
 gpt-5.6-sol did round-1 then was classifier-ejected on round-2 (exhibit saved).
 

@@ -1,4 +1,4 @@
-﻿Live served_model sample — 2026-07-11 overnight run
+Live served_model sample — 2026-07-11 overnight run
 One real proxied call: gatehouse (in-process app, real network) -> api.anthropic.com /v1/messages
 Requested model: claude-sonnet-5 | max_tokens 32 | upstream 200
 Provider-asserted model (response body 'model'): claude-sonnet-5

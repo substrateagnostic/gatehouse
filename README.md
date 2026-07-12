@@ -80,7 +80,18 @@ See `DEFINITION_OF_DONE.md` for the evidence-linked build checklist,
 `docs/INTEROP.md` for byte-exact constructions, and `docs/aer-feedback.md`
 for what implementing the spec a second time revealed.
 
+## License
+
+Apache-2.0 (see [LICENSE](./LICENSE)) — chosen for its explicit patent grant,
+which matters for standards-adjacent code. The check-layer dependency
+[FCE](https://github.com/substrateagnostic/fiduciary-constraint-evaluation) is
+Apache-2.0 as well; the [AER spec](https://github.com/substrateagnostic/agent-evidence-record)
+is CC BY 4.0.
+
 ## Status
 
-v0.1, built overnight 2026-07-10 → 07-11. Not yet published; license and
-name are open human decisions (see `NEEDS_YOU.md`).
+v0.1, built overnight 2026-07-10 → 07-11 and reviewed across two independent
+adversarial passes (Opus 4.8 + Codex GPT-5.6-Sol), both signed off. 118 tests;
+bundles verify AUTHENTICATED under the AgentLedger TypeScript reference verifier.
+See `NEEDS_YOU.md` for the honest scope (streaming is not yet supported) and
+`docs/redteam/` for the review record.

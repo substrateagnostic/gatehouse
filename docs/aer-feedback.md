@@ -250,7 +250,9 @@ reconstructing the log by hand.
 
 Found in the Opus 4.8 adversarial verifier review (2026-07-11;
 `docs/redteam/2026-07-11-opus-verifier-review.md`), reproduced in
-`scripts/redteam_opus_poc.py`.
+`scripts/redteam_opus_poc.py`. Filed publicly as
+[agent-evidence-record#6](https://github.com/substrateagnostic/agent-evidence-record/issues/6)
+(before this implementation published, so the spec never silently diverges).
 
 The §4.2 operator seal signs `{session_id, merkle_root, entry_count, closed_at,
 schema_version, agent_fingerprint, canonicalization}`. That binds the entry set
